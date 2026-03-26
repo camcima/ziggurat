@@ -1,6 +1,16 @@
 {
   "name": "@ziggurat/core",
   "version": "0.0.0",
+  "description": "Multi-layer cache orchestrator with stampede protection",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/camcima/ziggurat.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

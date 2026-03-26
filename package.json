@@ -2,8 +2,10 @@
   "name": "ziggurat",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
+    "release": "release-it",
     "build": "turbo run build",
     "test": "turbo run test",
     "test:coverage": "turbo run test:coverage",
@@ -25,6 +27,7 @@
     "eslint-config-prettier": "^10.0.0",
     "prettier": "^3.0.0",
     "release-it": "^18.0.0",
+    "release-it-pnpm": "^4.6.6",
     "tsup": "^8.0.0",
     "turbo": "^2.0.0",
     "typescript": "^5.5.0",

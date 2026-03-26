@@ -1,6 +1,16 @@
 {
   "name": "@ziggurat/nestjs",
   "version": "0.0.0",
+  "description": "NestJS module for @ziggurat/core multi-layer cache",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/camcima/ziggurat.git",
+    "directory": "packages/nestjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

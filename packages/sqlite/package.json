@@ -1,6 +1,16 @@
 {
   "name": "@ziggurat/sqlite",
   "version": "0.0.0",
+  "description": "SQLite adapter for @ziggurat/core multi-layer cache",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/camcima/ziggurat.git",
+    "directory": "packages/sqlite"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

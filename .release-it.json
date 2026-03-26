@@ -7,12 +7,15 @@
     "release": true
   },
   "npm": {
-    "publish": true
+    "publish": false
   },
   "plugins": {
     "@release-it/conventional-changelog": {
       "preset": "conventionalcommits",
       "infile": "CHANGELOG.md"
+    },
+    "release-it-pnpm": {
+      "publishCommand": "pnpm publish --access public --no-git-checks"
     }
   }
 }

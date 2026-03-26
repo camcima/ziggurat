@@ -1,6 +1,6 @@
 {
   "name": "@ziggurat/nestjs",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "NestJS module for @ziggurat/core multi-layer cache",
   "license": "MIT",
   "repository": {

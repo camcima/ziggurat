@@ -1,0 +1,49 @@
+{
+  "name": "@ziggurat/nestjs",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "keywords": [
+    "cache",
+    "nestjs",
+    "layered-cache",
+    "cache-module"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@ziggurat/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "reflect-metadata": "^0.2.0"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/testing": "^10.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0",
+    "typescript": "^5.5.0",
+    "tsup": "^8.0.0",
+    "vitest": "^2.0.0"
+  }
+}

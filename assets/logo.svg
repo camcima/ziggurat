@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 100" role="img" aria-label="Ziggurat logo">
+  <defs>
+    <style>
+      @media (prefers-color-scheme: dark) {
+        .logo-text { fill: #e6edf3; }
+        .mark-stroke { stroke: #d88a3d; fill: none; }
+        .mark-fill { fill: #d88a3d; }
+      }
+      @media (prefers-color-scheme: light) {
+        .logo-text { fill: #24292f; }
+        .mark-stroke { stroke: #c7742f; fill: none; }
+        .mark-fill { fill: #c7742f; }
+      }
+    </style>
+  </defs>
+
+  <!-- Ziggurat terraces -->
+  <polygon
+    class="mark-stroke"
+    points="14,72 104,72 94,58 24,58"
+    stroke-width="2"
+    opacity="0.4"
+  />
+  <polygon
+    class="mark-fill"
+    points="26,70 92,70 85,60 33,60"
+    opacity="0.12"
+  />
+
+  <polygon
+    class="mark-stroke"
+    points="28,56 90,56 82,43 36,43"
+    stroke-width="2"
+    opacity="0.7"
+  />
+  <polygon
+    class="mark-fill"
+    points="38,54 80,54 74,45 44,45"
+    opacity="0.18"
+  />
+
+  <polygon
+    class="mark-stroke"
+    points="42,41 76,41 70,29 48,29"
+    stroke-width="2"
+  />
+  <polygon
+    class="mark-fill"
+    points="49,39 69,39 65,31 53,31"
+  />
+
+  <!-- Central stair / axis -->
+  <path
+    class="mark-stroke"
+    d="M59 72 L59 58 M59 56 L59 43 M59 41 L59 29"
+    stroke-width="2"
+    stroke-linecap="round"
+  />
+  <path
+    class="mark-stroke"
+    d="M49 72 L49 66 L54 66 L54 60 L59 60 L59 54 L64 54 L64 48 L69 48 L69 43"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.85"
+  />
+
+  <!-- Logo text -->
+  <text
+    class="logo-text"
+    x="126"
+    y="66"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="60"
+    font-weight="bold"
+    letter-spacing="6"
+  >
+    ziggurat
+  </text>
+</svg>

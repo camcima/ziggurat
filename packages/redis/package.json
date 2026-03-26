@@ -1,0 +1,44 @@
+{
+  "name": "@ziggurat/redis",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "keywords": [
+    "cache",
+    "redis",
+    "layered-cache",
+    "cache-adapter"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:functional": "vitest run --config vitest.functional.config.ts",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@ziggurat/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "ioredis": "^5.0.0"
+  },
+  "devDependencies": {
+    "ioredis": "^5.0.0",
+    "typescript": "^5.5.0",
+    "tsup": "^8.0.0",
+    "vitest": "^2.0.0"
+  }
+}

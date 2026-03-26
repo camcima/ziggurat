@@ -1,0 +1,43 @@
+{
+  "name": "@ziggurat/core",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "keywords": [
+    "cache",
+    "caching",
+    "multi-layer",
+    "layered-cache",
+    "stampede",
+    "dogpile",
+    "cache-stampede",
+    "ttl"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "node-cache": "^5.1.2"
+  }
+}

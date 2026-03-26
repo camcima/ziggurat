@@ -1,0 +1,47 @@
+{
+  "name": "@ziggurat/sqlite",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "keywords": [
+    "cache",
+    "sqlite",
+    "embedded-cache",
+    "persistent-cache",
+    "layered-cache",
+    "cache-adapter"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:functional": "vitest run --config vitest.functional.config.ts",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@ziggurat/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^11.0.0",
+    "@types/better-sqlite3": "^7.6.0",
+    "typescript": "^5.5.0",
+    "tsup": "^8.0.0",
+    "vitest": "^2.0.0"
+  }
+}

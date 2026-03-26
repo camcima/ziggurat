@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["vitest.workspace.ts"],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/redis" },
+    { "path": "packages/nestjs" }
+  ]
+}

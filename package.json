@@ -1,0 +1,38 @@
+{
+  "name": "ziggurat",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "test:coverage": "turbo run test:coverage",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "turbo run typecheck",
+    "test:functional": "pnpm test:functional:redis && pnpm test:functional:memcache && pnpm test:functional:sqlite",
+    "test:functional:redis": "pnpm --filter @ziggurat/redis test:functional",
+    "test:functional:memcache": "pnpm --filter @ziggurat/memcache test:functional",
+    "test:functional:sqlite": "pnpm --filter @ziggurat/sqlite test:functional"
+  },
+  "devDependencies": {
+    "@release-it/conventional-changelog": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "prettier": "^3.0.0",
+    "release-it": "^18.0.0",
+    "tsup": "^8.0.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.57.2",
+    "vitest": "^2.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=18"
+  }
+}

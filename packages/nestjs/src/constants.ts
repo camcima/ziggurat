@@ -1,0 +1,2 @@
+export const ZIGGURAT_OPTIONS = "ZIGGURAT_OPTIONS";
+export const CACHE_MANAGER = "CACHE_MANAGER";

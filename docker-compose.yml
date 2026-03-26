@@ -1,0 +1,37 @@
+# Ziggurat — Local backend provisioning for functional tests
+#
+# Usage:
+#   docker compose --profile redis up -d    # Start only Redis
+#   docker compose --profile redis down     # Stop Redis
+#   docker compose up -d                    # Start all backends (none by default)
+#
+# Adding a new backend:
+#   1. Add a service definition below with `profiles: [backend-name]`
+#   2. Expose the default port and add a health check
+#   3. Add the corresponding env var to .env.example
+#   4. Add a matrix entry in .github/workflows/functional-tests.yml
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    profiles:
+      - redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  memcached:
+    image: memcached:1-alpine
+    ports:
+      - "11211:11211"
+    profiles:
+      - memcached
+    healthcheck:
+      test: ["CMD-SHELL", "echo stats | nc localhost 11211 | grep -q pid"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

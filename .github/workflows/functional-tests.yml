@@ -1,0 +1,82 @@
+# Functional tests against real cache backends
+#
+# Adding a new backend:
+#   1. Add an entry to the matrix with:
+#      - backend: backend-name
+#      - service image and port
+#      - environment variable name and value
+#      - test command
+#   2. Ensure the adapter package has a `test:functional` script
+
+name: Functional Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  functional:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: redis
+            service-image: redis:7
+            service-port: 6379
+            health-cmd: redis-cli ping
+            env-var: REDIS_URL
+            env-value: redis://localhost:6379
+            test-cmd: pnpm test:functional:redis
+          - backend: memcache
+            service-image: memcached:1
+            service-port: 11211
+            health-cmd: "bash -c ': > /dev/tcp/localhost/11211'"
+            env-var: MEMCACHE_URL
+            env-value: localhost:11211
+            test-cmd: pnpm test:functional:memcache
+
+    name: ${{ matrix.backend }}
+
+    services:
+      backend:
+        image: ${{ matrix.service-image }}
+        ports:
+          - ${{ matrix.service-port }}:${{ matrix.service-port }}
+        options: >-
+          --health-cmd "${{ matrix.health-cmd }}"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run ${{ matrix.backend }} functional tests
+        run: ${{ matrix.test-cmd }}
+        env:
+          ${{ matrix.env-var }}: ${{ matrix.env-value }}
+
+  # SQLite needs no external service — runs against a temp file
+  sqlite:
+    runs-on: ubuntu-latest
+    name: sqlite
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run sqlite functional tests
+        run: pnpm test:functional:sqlite

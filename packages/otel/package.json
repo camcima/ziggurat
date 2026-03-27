@@ -1,0 +1,57 @@
+{
+  "name": "@ziggurat/otel",
+  "version": "0.1.0",
+  "description": "OpenTelemetry instrumentation for @ziggurat/core multi-layer cache",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/camcima/ziggurat.git",
+    "directory": "packages/otel"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "keywords": [
+    "cache",
+    "opentelemetry",
+    "otel",
+    "metrics",
+    "observability",
+    "instrumentation",
+    "layered-cache"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@ziggurat/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.0.0"
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-metrics": "^1.25.0",
+    "typescript": "^5.5.0",
+    "tsup": "^8.0.0",
+    "vitest": "^2.0.0"
+  }
+}

@@ -164,6 +164,90 @@ const results = await Promise.allSettled(
 // The in-flight entry is cleaned up — next call retries the factory
 ```
 
+## Observability
+
+### Event-Based Monitoring
+
+Every `CacheManager` instance emits typed events with zero overhead when no listeners are attached. Use these to build dashboards, alerting, or custom metrics:
+
+```ts
+const cache = new CacheManager({
+  layers: [memory, redis],
+});
+
+// Track hit rate
+let hits = 0;
+let misses = 0;
+cache.on("hit", () => hits++);
+cache.on("miss", () => misses++);
+
+setInterval(() => {
+  const total = hits + misses;
+  if (total > 0) {
+    console.log(`Hit rate: ${((hits / total) * 100).toFixed(1)}%`);
+  }
+  hits = 0;
+  misses = 0;
+}, 60_000);
+```
+
+### OpenTelemetry Integration
+
+The `@ziggurat/otel` package automatically translates cache events into OTel counters and histograms. It depends only on `@opentelemetry/api` (the lightweight API package) — your application provides the SDK and exporter.
+
+```bash
+npm install @ziggurat/otel @opentelemetry/api
+```
+
+```ts
+import { CacheManager, MemoryAdapter } from "@ziggurat/core";
+import { RedisAdapter } from "@ziggurat/redis";
+import { instrumentCacheManager } from "@ziggurat/otel";
+
+const cache = new CacheManager({
+  layers: [
+    new MemoryAdapter({ defaultTtlMs: 30_000 }),
+    new RedisAdapter({ client: redis, defaultTtlMs: 300_000 }),
+  ],
+});
+
+// Start recording — metrics flow to your configured OTel backend
+const cleanup = instrumentCacheManager(cache, { meterName: "my-app" });
+
+// Use cache normally
+await cache.wrap("user:42", () => db.users.findById(42));
+
+// On application shutdown
+cleanup();
+```
+
+This records counters (`ziggurat.cache.hit`, `ziggurat.cache.miss`, `ziggurat.cache.error`, etc.) and histograms (`ziggurat.cache.duration`, `ziggurat.cache.wrap.factory_duration`) with attributes like `cache.layer` and `cache.operation`. See the [API Reference](api-reference.md#zigguratolel) for the full list.
+
+### Monitoring Without OTel
+
+If you don't use OpenTelemetry, subscribe to events directly and push to any metrics system:
+
+```ts
+// Prometheus via prom-client
+import { Counter } from "prom-client";
+
+const cacheHits = new Counter({ name: "cache_hits_total", help: "Cache hits", labelNames: ["layer"] });
+const cacheMisses = new Counter({ name: "cache_misses_total", help: "Cache misses" });
+
+cache.on("hit", (e) => cacheHits.inc({ layer: e.layerName }));
+cache.on("miss", () => cacheMisses.inc());
+```
+
+```ts
+// StatsD
+import StatsD from "hot-shots";
+const client = new StatsD();
+
+cache.on("hit", (e) => client.increment("cache.hit", { layer: e.layerName }));
+cache.on("miss", () => client.increment("cache.miss"));
+cache.on("wrap:miss", (e) => client.histogram("cache.factory_duration", e.factoryDurationMs));
+```
+
 ## Cache Key Design
 
 ### Hierarchical Keys

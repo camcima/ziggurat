@@ -26,6 +26,7 @@ A modern, multi-layered caching library for TypeScript with built-in stampede pr
 - **Batch operations** — `mget`, `mset`, `mdel` for efficient multi-key operations with multi-layer orchestration and automatic backfill.
 - **NestJS integration** — First-class `@Cached()` decorator and `ZigguratModule` for dependency injection. Zero boilerplate caching on any service method.
 - **Fully typed** — Generic `CacheEntry<T>` ensures type safety from cache to consumer. No `any` casts needed.
+- **Observable** — Built-in event system for hit/miss rates, per-layer latency, backfill, and stampede coalescing. Optional `@ziggurat/otel` package for OpenTelemetry integration.
 - **Resilient** — Individual layer failures are silently skipped. A Redis outage won't take down your application.
 
 ## Packages
@@ -37,6 +38,7 @@ A modern, multi-layered caching library for TypeScript with built-in stampede pr
 | [`@ziggurat/memcache`](packages/memcache) | Memcached adapter using `memjs`                                    |
 | [`@ziggurat/sqlite`](packages/sqlite)     | SQLite adapter using `better-sqlite3` for persistent local caching |
 | [`@ziggurat/nestjs`](packages/nestjs)     | NestJS module and `@Cached()` decorator                            |
+| [`@ziggurat/otel`](packages/otel)         | OpenTelemetry instrumentation (counters, histograms)               |
 
 ## Quick Start
 
@@ -57,6 +59,9 @@ npm install @ziggurat/sqlite better-sqlite3
 
 # Optional: NestJS integration
 npm install @ziggurat/nestjs
+
+# Optional: OpenTelemetry instrumentation
+npm install @ziggurat/otel @opentelemetry/api
 ```
 
 ### Basic Usage
@@ -142,7 +147,7 @@ See the [docs](docs/) directory for detailed guides:
 - [Memcache Adapter](docs/memcache-adapter.md) — Memcached configuration and limitations
 - [SQLite Adapter](docs/sqlite-adapter.md) — Persistent local caching with SQLite
 - [NestJS Integration](docs/nestjs-integration.md) — Module setup, decorators, and async configuration
-- [Advanced Usage](docs/advanced-usage.md) — Error handling, performance tuning, and patterns
+- [Advanced Usage](docs/advanced-usage.md) — Error handling, performance tuning, observability, and patterns
 
 ## Requirements
 

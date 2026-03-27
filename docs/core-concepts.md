@@ -192,6 +192,54 @@ await cache.wrap("key", factory, 300_000);
 
 Internally, TTL is stored as an absolute Unix timestamp (`expiresAt`) on the `CacheEntry`. Expired entries are lazily cleaned up on the next `get` call.
 
+## Observability
+
+The `CacheManager` emits typed events for every operation — hits, misses, errors, backfills, stampede coalescing, and more. Events have **zero cost** when no listeners are attached.
+
+### Subscribing to Events
+
+```ts
+const cache = new CacheManager({
+  layers: [memory, redis],
+});
+
+// Log cache misses
+cache.on("miss", (e) => {
+  console.log(`Miss: ${e.key} (${e.durationMs.toFixed(1)}ms)`);
+});
+
+// Track errors per layer
+cache.on("error", (e) => {
+  console.error(`Layer ${e.layerName} failed on ${e.operation}:`, e.error);
+});
+
+// Monitor backfill activity
+cache.on("backfill", (e) => {
+  console.log(`Backfill: ${e.key} from ${e.sourceLayerName} → ${e.targetLayerNames.join(", ")}`);
+});
+```
+
+The `on()` method returns an unsubscribe function:
+
+```ts
+const unsub = cache.on("hit", listener);
+// ...later
+unsub(); // stop listening
+```
+
+### OpenTelemetry Integration
+
+The `@ziggurat/otel` package translates cache events into OTel counters and histograms. It only depends on `@opentelemetry/api` (the lightweight API, not the SDK) — your application provides the SDK and exporter.
+
+```ts
+import { instrumentCacheManager } from "@ziggurat/otel";
+
+const cleanup = instrumentCacheManager(cache);
+// Metrics are now flowing to your OTel backend
+```
+
+See the [API Reference](api-reference.md#zigguratolel) for the full list of recorded metrics.
+
 ## Error Handling
 
 Ziggurat is designed to be resilient. Cross-layer operations are best-effort, not atomic — there is no distributed transaction across independent backends. Individual layer failures never crash the overall operation:

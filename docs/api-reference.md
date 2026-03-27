@@ -24,6 +24,7 @@ new CacheManager(options: CacheManagerOptions)
 | `namespace`    | `string`         | _none_               | Prefix prepended to all keys as `namespace:key`. Useful for logical grouping. |
 | `syncBackfill` | `boolean`        | `false`              | When `true`, waits for backfill to complete before returning.                 |
 | `stampede`     | `StampedeConfig` | `{ coalesce: true }` | Stampede protection configuration.                                            |
+| `events`       | `TypedEventEmitter<CacheEventMap>` | _(auto-created)_ | Optional shared event emitter for observability. If omitted, an internal one is created. |
 
 **`StampedeConfig`**:
 
@@ -160,6 +161,41 @@ switch (result.kind) {
 ##### `has(key: string): Promise<boolean>`
 
 Check existence across layers. Returns `true` on first hit.
+
+##### `on<K extends keyof CacheEventMap>(event: K, listener: (e: CacheEventMap[K]) => void): () => void`
+
+Subscribe to cache events for observability. Returns an unsubscribe function. Events are emitted synchronously and have zero cost when no listeners are attached.
+
+```ts
+// Track hit/miss ratio
+const unsub = cache.on("hit", (e) => {
+  console.log(`Hit on ${e.key} from layer ${e.layerName} in ${e.durationMs}ms`);
+});
+
+// Later: stop listening
+unsub();
+```
+
+**Available events:**
+
+| Event           | Key Fields                                          | Emitted When                              |
+| --------------- | --------------------------------------------------- | ----------------------------------------- |
+| `hit`           | `key`, `layerName`, `layerIndex`, `durationMs`      | `get()` finds a value in any layer        |
+| `miss`          | `key`, `durationMs`                                 | `get()` exhausts all layers               |
+| `set`           | `key`, `ttlMs`, `durationMs`                        | `set()` writes to all layers              |
+| `delete`        | `key`, `durationMs`                                 | `delete()` removes from all layers        |
+| `error`         | `key`, `operation`, `layerName`, `layerIndex`, `error` | Any layer throws during an operation   |
+| `backfill`      | `key`, `sourceLayerName`, `sourceLayerIndex`, `targetLayerNames` | A lower-layer hit triggers backfill |
+| `wrap:hit`      | `key`, `durationMs`                                 | `wrap()` finds a cached value             |
+| `wrap:miss`     | `key`, `durationMs`, `factoryDurationMs`            | `wrap()` calls the factory                |
+| `wrap:coalesce` | `key`                                               | `wrap()` joins an in-flight request       |
+| `mget`          | `keys`, `hitCount`, `missCount`, `durationMs`       | `mget()` completes                        |
+| `mset`          | `keyCount`, `durationMs`                            | `mset()` completes                        |
+| `mdel`          | `keyCount`, `durationMs`                            | `mdel()` completes                        |
+
+All events include an optional `namespace` field when the manager has a namespace configured.
+
+See [Observability](#zigguratolel) for OpenTelemetry integration.
 
 ---
 
@@ -448,4 +484,75 @@ export class MyService {
     return this.cache.wrap("key", () => this.expensiveWork());
   }
 }
+```
+
+---
+
+<a id="zigguratolel"></a>
+
+## `@ziggurat/otel`
+
+### `instrumentCacheManager`
+
+Connects a `CacheManager`'s event system to OpenTelemetry metrics. Requires `@opentelemetry/api` as a peer dependency — bring your own OTel SDK and exporter.
+
+```ts
+import { instrumentCacheManager } from "@ziggurat/otel";
+```
+
+#### Signature
+
+```ts
+instrumentCacheManager(cacheManager: CacheManager, options?: InstrumentationOptions): () => void
+```
+
+**`InstrumentationOptions`**:
+
+| Property    | Type     | Default       | Description                                     |
+| ----------- | -------- | ------------- | ----------------------------------------------- |
+| `meterName` | `string` | `"ziggurat"` | Name passed to `metrics.getMeter()`.             |
+
+Returns a cleanup function that unsubscribes all listeners.
+
+#### Recorded Metrics
+
+**Counters:**
+
+| Metric Name                    | Attributes                   | Description                                  |
+| ------------------------------ | ---------------------------- | -------------------------------------------- |
+| `ziggurat.cache.hit`           | `cache.layer`                | Cache hits                                   |
+| `ziggurat.cache.miss`          |                              | Cache misses                                 |
+| `ziggurat.cache.set`           |                              | Set operations                               |
+| `ziggurat.cache.delete`        |                              | Delete operations                            |
+| `ziggurat.cache.error`         | `cache.layer`, `cache.operation` | Layer errors                             |
+| `ziggurat.cache.backfill`      | `cache.source_layer`         | Backfill events                              |
+| `ziggurat.cache.wrap.hit`      |                              | Wrap cache hits                              |
+| `ziggurat.cache.wrap.miss`     |                              | Wrap cache misses (factory called)           |
+| `ziggurat.cache.wrap.coalesce` |                              | Coalesced requests (stampede prevention)      |
+
+**Histograms:**
+
+| Metric Name                           | Attributes                           | Unit | Description                        |
+| ------------------------------------- | ------------------------------------ | ---- | ---------------------------------- |
+| `ziggurat.cache.duration`             | `cache.operation`, `cache.layer`     | ms   | Duration of cache operations       |
+| `ziggurat.cache.wrap.factory_duration` |                                     | ms   | Duration of wrap factory calls     |
+
+#### Usage
+
+```ts
+import { CacheManager, MemoryAdapter } from "@ziggurat/core";
+import { instrumentCacheManager } from "@ziggurat/otel";
+
+const cache = new CacheManager({
+  layers: [new MemoryAdapter()],
+});
+
+// Start recording metrics
+const cleanup = instrumentCacheManager(cache, { meterName: "my-app" });
+
+// Use cache normally — metrics are recorded automatically
+await cache.wrap("key", () => fetchData());
+
+// On shutdown
+cleanup();
 ```

@@ -9,9 +9,6 @@
   "npm": {
     "publish": false
   },
-  "hooks": {
-    "after:bump": "pnpm -r publish --access public --no-git-checks"
-  },
   "plugins": {
     "@release-it/conventional-changelog": {
       "preset": "conventionalcommits",

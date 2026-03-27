@@ -30,7 +30,8 @@
     "cache-adapter"
   ],
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsup",

@@ -1,8 +1,6 @@
 export type Listener<T> = (event: T) => void;
 
-export class TypedEventEmitter<
-  TEventMap extends Record<string, unknown>,
-> {
+export class TypedEventEmitter<TEventMap extends Record<string, unknown>> {
   private listeners = new Map<keyof TEventMap, Set<Listener<never>>>();
 
   on<K extends keyof TEventMap>(

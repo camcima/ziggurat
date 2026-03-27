@@ -19,26 +19,25 @@ const db = new Database("cache.db");
 
 const cache = new CacheManager({
   layers: [
-    new MemoryAdapter({ defaultTtlMs: 30_000 }),       // L1: fast, volatile
-    new SQLiteAdapter({                                  // L2: persistent
+    new MemoryAdapter({ defaultTtlMs: 30_000 }), // L1: fast, volatile
+    new SQLiteAdapter({
+      // L2: persistent
       db,
       defaultTtlMs: 120_000,
     }),
   ],
 });
 
-const user = await cache.wrap(`user:${id}`, async () =>
-  api.getUser(id),
-);
+const user = await cache.wrap(`user:${id}`, async () => api.getUser(id));
 ```
 
 ## Options
 
 ```ts
 interface SQLiteAdapterOptions {
-  db: Database;              // better-sqlite3 database instance
-  defaultTtlMs?: number;    // Default TTL in milliseconds
-  tableName?: string;        // Table name (default: "cache")
+  db: Database; // better-sqlite3 database instance
+  defaultTtlMs?: number; // Default TTL in milliseconds
+  tableName?: string; // Table name (default: "cache")
 }
 ```
 

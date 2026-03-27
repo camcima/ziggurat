@@ -231,8 +231,15 @@ If you don't use OpenTelemetry, subscribe to events directly and push to any met
 // Prometheus via prom-client
 import { Counter } from "prom-client";
 
-const cacheHits = new Counter({ name: "cache_hits_total", help: "Cache hits", labelNames: ["layer"] });
-const cacheMisses = new Counter({ name: "cache_misses_total", help: "Cache misses" });
+const cacheHits = new Counter({
+  name: "cache_hits_total",
+  help: "Cache hits",
+  labelNames: ["layer"],
+});
+const cacheMisses = new Counter({
+  name: "cache_misses_total",
+  help: "Cache misses",
+});
 
 cache.on("hit", (e) => cacheHits.inc({ layer: e.layerName }));
 cache.on("miss", () => cacheMisses.inc());
@@ -245,7 +252,9 @@ const client = new StatsD();
 
 cache.on("hit", (e) => client.increment("cache.hit", { layer: e.layerName }));
 cache.on("miss", () => client.increment("cache.miss"));
-cache.on("wrap:miss", (e) => client.histogram("cache.factory_duration", e.factoryDurationMs));
+cache.on("wrap:miss", (e) =>
+  client.histogram("cache.factory_duration", e.factoryDurationMs),
+);
 ```
 
 ## Cache Key Design

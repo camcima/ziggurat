@@ -55,9 +55,7 @@ ZigguratModule.forRootAsync({
   imports: [ConfigModule],
   inject: [ConfigService],
   useFactory: (config: ConfigService) => ({
-    layers: [
-      new MemoryAdapter({ defaultTtlMs: config.get("CACHE_TTL") }),
-    ],
+    layers: [new MemoryAdapter({ defaultTtlMs: config.get("CACHE_TTL") })],
   }),
 });
 ```

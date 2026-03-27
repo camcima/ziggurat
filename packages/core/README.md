@@ -45,7 +45,7 @@ import Redis from "ioredis";
 const cache = new CacheManager({
   namespace: "products",
   layers: [
-    new MemoryAdapter({ defaultTtlMs: 30_000 }),      // L1: 30s
+    new MemoryAdapter({ defaultTtlMs: 30_000 }), // L1: 30s
     new RedisAdapter({ client: new Redis(), defaultTtlMs: 600_000 }), // L2: 10min
   ],
 });
@@ -59,7 +59,9 @@ const product = await cache.wrap(id, async () => api.getProduct(id));
 ```ts
 cache.on("hit", (e) => console.log(`HIT ${e.key} from ${e.layerName}`));
 cache.on("miss", (e) => console.log(`MISS ${e.key}`));
-cache.on("backfill", (e) => console.log(`BACKFILL ${e.key} from ${e.fromLayerName}`));
+cache.on("backfill", (e) =>
+  console.log(`BACKFILL ${e.key} from ${e.fromLayerName}`),
+);
 cache.on("wrap:coalesce", (e) => console.log(`COALESCE ${e.key}`));
 ```
 
@@ -67,17 +69,17 @@ cache.on("wrap:coalesce", (e) => console.log(`COALESCE ${e.key}`));
 
 ### CacheManager
 
-| Method | Description |
-|--------|-------------|
-| `get<T>(key)` | Read from cache, cascading through layers |
-| `set<T>(key, value, ttlMs?)` | Write to all layers |
-| `delete(key)` | Delete from all layers |
-| `wrap<T>(key, factory, ttlMs?)` | Get-or-compute with stampede protection |
-| `mget<T>(keys)` | Batch get across layers |
-| `mset<T>(entries, ttlMs?)` | Batch set across layers |
-| `mdel(keys)` | Batch delete across layers |
-| `on(event, listener)` | Subscribe to cache events |
-| `off(event, listener)` | Unsubscribe from cache events |
+| Method                          | Description                               |
+| ------------------------------- | ----------------------------------------- |
+| `get<T>(key)`                   | Read from cache, cascading through layers |
+| `set<T>(key, value, ttlMs?)`    | Write to all layers                       |
+| `delete(key)`                   | Delete from all layers                    |
+| `wrap<T>(key, factory, ttlMs?)` | Get-or-compute with stampede protection   |
+| `mget<T>(keys)`                 | Batch get across layers                   |
+| `mset<T>(entries, ttlMs?)`      | Batch set across layers                   |
+| `mdel(keys)`                    | Batch delete across layers                |
+| `on(event, listener)`           | Subscribe to cache events                 |
+| `off(event, listener)`          | Unsubscribe from cache events             |
 
 ### MemoryAdapter
 

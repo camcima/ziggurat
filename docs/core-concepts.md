@@ -215,7 +215,9 @@ cache.on("error", (e) => {
 
 // Monitor backfill activity
 cache.on("backfill", (e) => {
-  console.log(`Backfill: ${e.key} from ${e.sourceLayerName} → ${e.targetLayerNames.join(", ")}`);
+  console.log(
+    `Backfill: ${e.key} from ${e.sourceLayerName} → ${e.targetLayerNames.join(", ")}`,
+  );
 });
 ```
 

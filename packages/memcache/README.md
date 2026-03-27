@@ -19,26 +19,25 @@ const memcached = memjs.Client.create("localhost:11211");
 
 const cache = new CacheManager({
   layers: [
-    new MemoryAdapter({ defaultTtlMs: 30_000 }),       // L1: fast, in-process
-    new MemcacheAdapter({                                // L2: shared
+    new MemoryAdapter({ defaultTtlMs: 30_000 }), // L1: fast, in-process
+    new MemcacheAdapter({
+      // L2: shared
       client: memcached,
       defaultTtlMs: 600_000,
     }),
   ],
 });
 
-const user = await cache.wrap(`user:${id}`, async () =>
-  db.users.findById(id),
-);
+const user = await cache.wrap(`user:${id}`, async () => db.users.findById(id));
 ```
 
 ## Options
 
 ```ts
 interface MemcacheAdapterOptions {
-  client: memjs.Client;     // memjs client instance
-  defaultTtlMs?: number;    // Default TTL in milliseconds
-  prefix?: string;           // Key prefix (default: none)
+  client: memjs.Client; // memjs client instance
+  defaultTtlMs?: number; // Default TTL in milliseconds
+  prefix?: string; // Key prefix (default: none)
 }
 ```
 

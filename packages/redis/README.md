@@ -17,26 +17,25 @@ import Redis from "ioredis";
 
 const cache = new CacheManager({
   layers: [
-    new MemoryAdapter({ defaultTtlMs: 30_000 }),      // L1: fast, in-process
-    new RedisAdapter({                                  // L2: shared, persistent
+    new MemoryAdapter({ defaultTtlMs: 30_000 }), // L1: fast, in-process
+    new RedisAdapter({
+      // L2: shared, persistent
       client: new Redis(),
       defaultTtlMs: 600_000,
     }),
   ],
 });
 
-const user = await cache.wrap(`user:${id}`, async () =>
-  db.users.findById(id),
-);
+const user = await cache.wrap(`user:${id}`, async () => db.users.findById(id));
 ```
 
 ## Options
 
 ```ts
 interface RedisAdapterOptions {
-  client: Redis;            // ioredis client instance
-  defaultTtlMs?: number;   // Default TTL in milliseconds
-  prefix?: string;          // Key prefix (default: none)
+  client: Redis; // ioredis client instance
+  defaultTtlMs?: number; // Default TTL in milliseconds
+  prefix?: string; // Key prefix (default: none)
 }
 ```
 

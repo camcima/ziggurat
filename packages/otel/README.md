@@ -31,25 +31,25 @@ cleanup();
 
 ```ts
 instrumentCacheManager(cache, {
-  meterName: "my-app",  // Custom OTel meter name (default: "ziggurat-cache")
+  meterName: "my-app", // Custom OTel meter name (default: "ziggurat-cache")
 });
 ```
 
 ## Metrics
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `ziggurat.cache.hit` | Counter | Cache hits (attributes: `cache.layer`) |
-| `ziggurat.cache.miss` | Counter | Cache misses |
-| `ziggurat.cache.set` | Counter | Cache writes |
-| `ziggurat.cache.delete` | Counter | Cache deletes |
-| `ziggurat.cache.error` | Counter | Layer errors (attributes: `cache.layer`, `cache.operation`) |
-| `ziggurat.cache.backfill` | Counter | Backfills from lower layers (attributes: `cache.source_layer`) |
-| `ziggurat.cache.wrap.hit` | Counter | `wrap()` served from cache |
-| `ziggurat.cache.wrap.miss` | Counter | `wrap()` called the factory |
-| `ziggurat.cache.wrap.coalesce` | Counter | Concurrent requests coalesced |
-| `ziggurat.cache.duration` | Histogram | Operation duration in ms (attributes: `cache.operation`, `cache.layer`) |
-| `ziggurat.cache.wrap.factory_duration` | Histogram | Factory call duration in ms |
+| Metric                                 | Type      | Description                                                             |
+| -------------------------------------- | --------- | ----------------------------------------------------------------------- |
+| `ziggurat.cache.hit`                   | Counter   | Cache hits (attributes: `cache.layer`)                                  |
+| `ziggurat.cache.miss`                  | Counter   | Cache misses                                                            |
+| `ziggurat.cache.set`                   | Counter   | Cache writes                                                            |
+| `ziggurat.cache.delete`                | Counter   | Cache deletes                                                           |
+| `ziggurat.cache.error`                 | Counter   | Layer errors (attributes: `cache.layer`, `cache.operation`)             |
+| `ziggurat.cache.backfill`              | Counter   | Backfills from lower layers (attributes: `cache.source_layer`)          |
+| `ziggurat.cache.wrap.hit`              | Counter   | `wrap()` served from cache                                              |
+| `ziggurat.cache.wrap.miss`             | Counter   | `wrap()` called the factory                                             |
+| `ziggurat.cache.wrap.coalesce`         | Counter   | Concurrent requests coalesced                                           |
+| `ziggurat.cache.duration`              | Histogram | Operation duration in ms (attributes: `cache.operation`, `cache.layer`) |
+| `ziggurat.cache.wrap.factory_duration` | Histogram | Factory call duration in ms                                             |
 
 ## Prometheus Example
 

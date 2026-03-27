@@ -41,13 +41,10 @@ export function instrumentCacheManager(
       description: "Number of coalesced wrap requests (stampede prevention)",
     },
   );
-  const durationHistogram = meter.createHistogram(
-    "ziggurat.cache.duration",
-    {
-      description: "Duration of cache operations in milliseconds",
-      unit: "ms",
-    },
-  );
+  const durationHistogram = meter.createHistogram("ziggurat.cache.duration", {
+    description: "Duration of cache operations in milliseconds",
+    unit: "ms",
+  });
   const factoryDurationHistogram = meter.createHistogram(
     "ziggurat.cache.wrap.factory_duration",
     {

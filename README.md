@@ -31,8 +31,8 @@ A modern, multi-layered caching library for TypeScript with built-in stampede pr
 
 ## Packages
 
-| Package                                   | Description                                                        |
-| ----------------------------------------- | ------------------------------------------------------------------ |
+| Package                                         | Description                                                        |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
 | [`@ziggurat-cache/core`](packages/core)         | CacheManager, MemoryAdapter, BaseCacheAdapter, and all core types  |
 | [`@ziggurat-cache/redis`](packages/redis)       | Redis adapter using `ioredis`                                      |
 | [`@ziggurat-cache/memcache`](packages/memcache) | Memcached adapter using `memjs`                                    |

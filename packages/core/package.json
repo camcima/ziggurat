@@ -1,6 +1,6 @@
 {
   "name": "@ziggurat-cache/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Multi-layer cache orchestrator with stampede protection",
   "license": "MIT",
   "repository": {

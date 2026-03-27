@@ -1,11 +1,11 @@
 # Memcache Adapter
 
-The `@ziggurat/memcache` package provides a `MemcacheAdapter` that uses [memjs](https://github.com/memcachier/memjs) to store cached values in Memcached. It's designed as a shared cache layer in a multi-layer cache stack.
+The `@ziggurat-cache/memcache` package provides a `MemcacheAdapter` that uses [memjs](https://github.com/memcachier/memjs) to store cached values in Memcached. It's designed as a shared cache layer in a multi-layer cache stack.
 
 ## Installation
 
 ```bash
-npm install @ziggurat/memcache memjs
+npm install @ziggurat-cache/memcache memjs
 ```
 
 `memjs` is a peer dependency — you bring your own client and manage the connection lifecycle.
@@ -13,8 +13,8 @@ npm install @ziggurat/memcache memjs
 ## Basic Setup
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
-import { MemcacheAdapter } from "@ziggurat/memcache";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
+import { MemcacheAdapter } from "@ziggurat-cache/memcache";
 import memjs from "memjs";
 
 const client = memjs.Client.create("localhost:11211");

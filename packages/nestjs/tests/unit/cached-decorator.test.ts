@@ -5,7 +5,7 @@ import { Injectable } from "@nestjs/common";
 import { ZigguratModule } from "../../src/ziggurat.module.js";
 import { Cached } from "../../src/cached.decorator.js";
 import { CACHE_MANAGER } from "../../src/constants.js";
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
 
 describe("@Cached() decorator", () => {
   let cacheManager: CacheManager;

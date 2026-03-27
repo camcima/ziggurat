@@ -9,7 +9,7 @@ Ziggurat is distributed as separate packages so you only install what you need.
 ### Core (required)
 
 ```bash
-npm install @ziggurat/core
+npm install @ziggurat-cache/core
 ```
 
 The core package includes the `CacheManager` orchestrator and the built-in `MemoryAdapter`.
@@ -17,7 +17,7 @@ The core package includes the `CacheManager` orchestrator and the built-in `Memo
 ### Redis Adapter (optional)
 
 ```bash
-npm install @ziggurat/redis ioredis
+npm install @ziggurat-cache/redis ioredis
 ```
 
 `ioredis` is a peer dependency — you provide and manage your own Redis client.
@@ -25,7 +25,7 @@ npm install @ziggurat/redis ioredis
 ### NestJS Integration (optional)
 
 ```bash
-npm install @ziggurat/nestjs
+npm install @ziggurat-cache/nestjs
 ```
 
 Requires `@nestjs/common` and `@nestjs/core` >= 10.x as peer dependencies.
@@ -37,7 +37,7 @@ Requires `@nestjs/common` and `@nestjs/core` >= 10.x as peer dependencies.
 Every Ziggurat setup starts with a `CacheManager` and at least one adapter (layer). Each adapter can define its own `defaultTtlMs`, and the manager can set a `namespace` to prefix all keys:
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
 
 const cache = new CacheManager({
   namespace: "users",
@@ -90,8 +90,8 @@ await cache.clear();
 To add distributed caching, stack a Redis adapter behind the memory layer. Each adapter defines its own TTL — memory expires fast, Redis holds data longer:
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
-import { RedisAdapter } from "@ziggurat/redis";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
+import { RedisAdapter } from "@ziggurat-cache/redis";
 import Redis from "ioredis";
 
 const cache = new CacheManager({

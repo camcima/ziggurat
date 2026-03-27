@@ -7,8 +7,8 @@
 The most common production pattern. Memory serves hot data with sub-millisecond latency; Redis provides shared persistence across instances. Each layer manages its own TTL:
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
-import { RedisAdapter } from "@ziggurat/redis";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
+import { RedisAdapter } from "@ziggurat-cache/redis";
 import Redis from "ioredis";
 
 const userCache = new CacheManager({
@@ -193,16 +193,16 @@ setInterval(() => {
 
 ### OpenTelemetry Integration
 
-The `@ziggurat/otel` package automatically translates cache events into OTel counters and histograms. It depends only on `@opentelemetry/api` (the lightweight API package) — your application provides the SDK and exporter.
+The `@ziggurat-cache/otel` package automatically translates cache events into OTel counters and histograms. It depends only on `@opentelemetry/api` (the lightweight API package) — your application provides the SDK and exporter.
 
 ```bash
-npm install @ziggurat/otel @opentelemetry/api
+npm install @ziggurat-cache/otel @opentelemetry/api
 ```
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
-import { RedisAdapter } from "@ziggurat/redis";
-import { instrumentCacheManager } from "@ziggurat/otel";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
+import { RedisAdapter } from "@ziggurat-cache/redis";
+import { instrumentCacheManager } from "@ziggurat-cache/otel";
 
 const cache = new CacheManager({
   layers: [

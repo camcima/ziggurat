@@ -5,7 +5,7 @@ Ziggurat's adapter interface is intentionally minimal. Any storage backend — a
 ## The `CacheAdapter` Interface
 
 ```ts
-import type { CacheAdapter, CacheEntry } from "@ziggurat/core";
+import type { CacheAdapter, CacheEntry } from "@ziggurat-cache/core";
 
 interface CacheAdapter {
   readonly name: string;
@@ -26,7 +26,7 @@ interface CacheEntry<T> {
 Here's a complete example of a SQLite adapter:
 
 ```ts
-import type { CacheAdapter, CacheEntry } from "@ziggurat/core";
+import type { CacheAdapter, CacheEntry } from "@ziggurat-cache/core";
 import Database from "better-sqlite3";
 
 export class SqliteAdapter implements CacheAdapter {
@@ -115,7 +115,7 @@ All methods return `Promise`. Even if your implementation is synchronous (like t
 Once implemented, use it like any built-in adapter:
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
 import { SqliteAdapter } from "./sqlite-adapter";
 
 const cache = new CacheManager({
@@ -131,7 +131,7 @@ const cache = new CacheManager({
 Ziggurat includes a shared contract test suite that verifies any adapter correctly implements the `CacheAdapter` interface. Use it to validate your custom adapter:
 
 ```ts
-import { runAdapterContractTests } from "@ziggurat/core/tests/contract/adapter-contract.test";
+import { runAdapterContractTests } from "@ziggurat-cache/core/tests/contract/adapter-contract.test";
 import { SqliteAdapter } from "./sqlite-adapter";
 
 runAdapterContractTests("SqliteAdapter", () => new SqliteAdapter(":memory:"));

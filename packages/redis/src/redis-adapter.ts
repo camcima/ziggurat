@@ -1,5 +1,5 @@
-import type { CacheEntry, CacheSetEntry } from "@ziggurat/core";
-import { BaseCacheAdapter } from "@ziggurat/core";
+import type { CacheEntry, CacheSetEntry } from "@ziggurat-cache/core";
+import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type { Redis } from "ioredis";
 
 export interface RedisAdapterOptions {

@@ -1,11 +1,11 @@
 # NestJS Integration
 
-The `@ziggurat/nestjs` package provides first-class NestJS support with a dynamic module for dependency injection and a `@Cached()` method decorator for declarative caching.
+The `@ziggurat-cache/nestjs` package provides first-class NestJS support with a dynamic module for dependency injection and a `@Cached()` method decorator for declarative caching.
 
 ## Installation
 
 ```bash
-npm install @ziggurat/core @ziggurat/nestjs
+npm install @ziggurat-cache/core @ziggurat-cache/nestjs
 ```
 
 Peer dependencies: `@nestjs/common` >= 10.x, `@nestjs/core` >= 10.x, `reflect-metadata`.
@@ -18,8 +18,8 @@ Use when your cache configuration is known at import time:
 
 ```ts
 import { Module } from "@nestjs/common";
-import { ZigguratModule } from "@ziggurat/nestjs";
-import { MemoryAdapter } from "@ziggurat/core";
+import { ZigguratModule } from "@ziggurat-cache/nestjs";
+import { MemoryAdapter } from "@ziggurat-cache/core";
 
 @Module({
   imports: [
@@ -38,9 +38,9 @@ Use when your configuration depends on other providers (e.g., `ConfigService`, e
 ```ts
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { ZigguratModule } from "@ziggurat/nestjs";
-import { MemoryAdapter } from "@ziggurat/core";
-import { RedisAdapter } from "@ziggurat/redis";
+import { ZigguratModule } from "@ziggurat-cache/nestjs";
+import { MemoryAdapter } from "@ziggurat-cache/core";
+import { RedisAdapter } from "@ziggurat-cache/redis";
 import Redis from "ioredis";
 
 @Module({
@@ -86,7 +86,7 @@ The `@Cached()` decorator wraps a service method with `CacheManager.wrap()`. It:
 
 ```ts
 import { Injectable } from "@nestjs/common";
-import { Cached } from "@ziggurat/nestjs";
+import { Cached } from "@ziggurat-cache/nestjs";
 
 @Injectable()
 export class UserService {
@@ -137,8 +137,8 @@ If you need direct access to the `CacheManager` instead of using the decorator, 
 
 ```ts
 import { Injectable, Inject } from "@nestjs/common";
-import { CACHE_MANAGER } from "@ziggurat/nestjs";
-import type { CacheManager } from "@ziggurat/core";
+import { CACHE_MANAGER } from "@ziggurat-cache/nestjs";
+import type { CacheManager } from "@ziggurat-cache/core";
 
 @Injectable()
 export class AnalyticsService {
@@ -192,8 +192,8 @@ In tests, you can provide a mock or real `CacheManager` using NestJS testing uti
 
 ```ts
 import { Test } from "@nestjs/testing";
-import { CACHE_MANAGER } from "@ziggurat/nestjs";
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
+import { CACHE_MANAGER } from "@ziggurat-cache/nestjs";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
 
 const module = await Test.createTestingModule({
   providers: [

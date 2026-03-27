@@ -9,7 +9,7 @@
 [![Test](https://github.com/camcima/ziggurat/actions/workflows/test.yml/badge.svg)](https://github.com/camcima/ziggurat/actions/workflows/test.yml)
 [![Functional Tests](https://github.com/camcima/ziggurat/actions/workflows/functional-tests.yml/badge.svg)](https://github.com/camcima/ziggurat/actions/workflows/functional-tests.yml)
 [![codecov](https://codecov.io/gh/camcima/ziggurat/graph/badge.svg)](https://codecov.io/gh/camcima/ziggurat)
-[![npm version](https://img.shields.io/npm/v/@ziggurat/core)](https://www.npmjs.com/package/@ziggurat/core)
+[![npm version](https://img.shields.io/npm/v/@ziggurat-cache/core)](https://www.npmjs.com/package/@ziggurat-cache/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5%2B-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%20%7C%2020%20%7C%2022-green.svg)](https://nodejs.org/)
@@ -26,19 +26,19 @@ A modern, multi-layered caching library for TypeScript with built-in stampede pr
 - **Batch operations** — `mget`, `mset`, `mdel` for efficient multi-key operations with multi-layer orchestration and automatic backfill.
 - **NestJS integration** — First-class `@Cached()` decorator and `ZigguratModule` for dependency injection. Zero boilerplate caching on any service method.
 - **Fully typed** — Generic `CacheEntry<T>` ensures type safety from cache to consumer. No `any` casts needed.
-- **Observable** — Built-in event system for hit/miss rates, per-layer latency, backfill, and stampede coalescing. Optional `@ziggurat/otel` package for OpenTelemetry integration.
+- **Observable** — Built-in event system for hit/miss rates, per-layer latency, backfill, and stampede coalescing. Optional `@ziggurat-cache/otel` package for OpenTelemetry integration.
 - **Resilient** — Individual layer failures are silently skipped. A Redis outage won't take down your application.
 
 ## Packages
 
 | Package                                   | Description                                                        |
 | ----------------------------------------- | ------------------------------------------------------------------ |
-| [`@ziggurat/core`](packages/core)         | CacheManager, MemoryAdapter, BaseCacheAdapter, and all core types  |
-| [`@ziggurat/redis`](packages/redis)       | Redis adapter using `ioredis`                                      |
-| [`@ziggurat/memcache`](packages/memcache) | Memcached adapter using `memjs`                                    |
-| [`@ziggurat/sqlite`](packages/sqlite)     | SQLite adapter using `better-sqlite3` for persistent local caching |
-| [`@ziggurat/nestjs`](packages/nestjs)     | NestJS module and `@Cached()` decorator                            |
-| [`@ziggurat/otel`](packages/otel)         | OpenTelemetry instrumentation (counters, histograms)               |
+| [`@ziggurat-cache/core`](packages/core)         | CacheManager, MemoryAdapter, BaseCacheAdapter, and all core types  |
+| [`@ziggurat-cache/redis`](packages/redis)       | Redis adapter using `ioredis`                                      |
+| [`@ziggurat-cache/memcache`](packages/memcache) | Memcached adapter using `memjs`                                    |
+| [`@ziggurat-cache/sqlite`](packages/sqlite)     | SQLite adapter using `better-sqlite3` for persistent local caching |
+| [`@ziggurat-cache/nestjs`](packages/nestjs)     | NestJS module and `@Cached()` decorator                            |
+| [`@ziggurat-cache/otel`](packages/otel)         | OpenTelemetry instrumentation (counters, histograms)               |
 
 ## Quick Start
 
@@ -46,28 +46,28 @@ A modern, multi-layered caching library for TypeScript with built-in stampede pr
 
 ```bash
 # Core package (includes MemoryAdapter)
-npm install @ziggurat/core
+npm install @ziggurat-cache/core
 
 # Optional: Redis adapter
-npm install @ziggurat/redis ioredis
+npm install @ziggurat-cache/redis ioredis
 
 # Optional: Memcached adapter
-npm install @ziggurat/memcache memjs
+npm install @ziggurat-cache/memcache memjs
 
 # Optional: SQLite adapter (persistent local cache)
-npm install @ziggurat/sqlite better-sqlite3
+npm install @ziggurat-cache/sqlite better-sqlite3
 
 # Optional: NestJS integration
-npm install @ziggurat/nestjs
+npm install @ziggurat-cache/nestjs
 
 # Optional: OpenTelemetry instrumentation
-npm install @ziggurat/otel @opentelemetry/api
+npm install @ziggurat-cache/otel @opentelemetry/api
 ```
 
 ### Basic Usage
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
 
 const cache = new CacheManager({
   namespace: "users",
@@ -86,8 +86,8 @@ const user = await cache.wrap(`profile:${userId}`, async () =>
 Each adapter manages its own TTL — memory expires fast, Redis holds data longer:
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
-import { RedisAdapter } from "@ziggurat/redis";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
+import { RedisAdapter } from "@ziggurat-cache/redis";
 import Redis from "ioredis";
 
 const cache = new CacheManager({
@@ -107,8 +107,8 @@ const product = await cache.wrap(id, async () => api.getProduct(id));
 ```ts
 // app.module.ts
 import { Module } from "@nestjs/common";
-import { ZigguratModule } from "@ziggurat/nestjs";
-import { MemoryAdapter } from "@ziggurat/core";
+import { ZigguratModule } from "@ziggurat-cache/nestjs";
+import { MemoryAdapter } from "@ziggurat-cache/core";
 
 @Module({
   imports: [
@@ -121,7 +121,7 @@ export class AppModule {}
 
 // user.service.ts
 import { Injectable } from "@nestjs/common";
-import { Cached } from "@ziggurat/nestjs";
+import { Cached } from "@ziggurat-cache/nestjs";
 
 @Injectable()
 export class UserService {

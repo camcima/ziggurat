@@ -1,7 +1,7 @@
 {
-  "name": "@ziggurat/nestjs",
+  "name": "@ziggurat-cache/nestjs",
   "version": "0.1.0",
-  "description": "NestJS module for @ziggurat/core multi-layer cache",
+  "description": "NestJS module for @ziggurat-cache/core multi-layer cache",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -39,7 +39,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.build.json"
   },
   "dependencies": {
-    "@ziggurat/core": "workspace:*"
+    "@ziggurat-cache/core": "workspace:*"
   },
   "peerDependencies": {
     "@nestjs/common": "^10.0.0",

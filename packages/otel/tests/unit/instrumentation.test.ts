@@ -9,8 +9,8 @@ import {
   CacheManager,
   MemoryAdapter,
   BaseCacheAdapter,
-} from "@ziggurat/core";
-import type { CacheEntry } from "@ziggurat/core";
+} from "@ziggurat-cache/core";
+import type { CacheEntry } from "@ziggurat-cache/core";
 import { instrumentCacheManager } from "../../src/instrumentation.js";
 
 describe("instrumentCacheManager", () => {

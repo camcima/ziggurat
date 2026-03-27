@@ -1,5 +1,5 @@
-import type { CacheEntry, CacheSetEntry, TtlResult } from "@ziggurat/core";
-import { BaseCacheAdapter } from "@ziggurat/core";
+import type { CacheEntry, CacheSetEntry, TtlResult } from "@ziggurat-cache/core";
+import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type Database from "better-sqlite3";
 
 export interface SQLiteAdapterOptions {

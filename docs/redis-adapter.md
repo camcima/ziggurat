@@ -1,11 +1,11 @@
 # Redis Adapter
 
-The `@ziggurat/redis` package provides a `RedisAdapter` that uses [ioredis](https://github.com/redis/ioredis) to store cached values in Redis. It's designed as a shared L2 (or deeper) layer in a multi-layer cache stack.
+The `@ziggurat-cache/redis` package provides a `RedisAdapter` that uses [ioredis](https://github.com/redis/ioredis) to store cached values in Redis. It's designed as a shared L2 (or deeper) layer in a multi-layer cache stack.
 
 ## Installation
 
 ```bash
-npm install @ziggurat/redis ioredis
+npm install @ziggurat-cache/redis ioredis
 ```
 
 `ioredis` is a peer dependency — you bring your own client and manage the connection lifecycle.
@@ -13,8 +13,8 @@ npm install @ziggurat/redis ioredis
 ## Basic Setup
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
-import { RedisAdapter } from "@ziggurat/redis";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
+import { RedisAdapter } from "@ziggurat-cache/redis";
 import Redis from "ioredis";
 
 const redis = new Redis("redis://localhost:6379");

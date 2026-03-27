@@ -9,7 +9,7 @@ import {
 } from "vitest";
 import Redis from "ioredis";
 import { RedisAdapter } from "../../src/redis-adapter.js";
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
 
 const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 const TEST_PREFIX = `ziggurat-multilayer:${Date.now()}:`;

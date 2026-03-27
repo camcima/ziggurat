@@ -4,7 +4,7 @@ import { Test } from "@nestjs/testing";
 import { Injectable, Module } from "@nestjs/common";
 import { ZigguratModule } from "../../src/ziggurat.module.js";
 import { CACHE_MANAGER } from "../../src/constants.js";
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
 
 describe("ZigguratModule", () => {
   describe("forRoot", () => {

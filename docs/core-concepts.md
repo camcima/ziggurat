@@ -229,10 +229,10 @@ unsub(); // stop listening
 
 ### OpenTelemetry Integration
 
-The `@ziggurat/otel` package translates cache events into OTel counters and histograms. It only depends on `@opentelemetry/api` (the lightweight API, not the SDK) — your application provides the SDK and exporter.
+The `@ziggurat-cache/otel` package translates cache events into OTel counters and histograms. It only depends on `@opentelemetry/api` (the lightweight API, not the SDK) — your application provides the SDK and exporter.
 
 ```ts
-import { instrumentCacheManager } from "@ziggurat/otel";
+import { instrumentCacheManager } from "@ziggurat-cache/otel";
 
 const cleanup = instrumentCacheManager(cache);
 // Metrics are now flowing to your OTel backend

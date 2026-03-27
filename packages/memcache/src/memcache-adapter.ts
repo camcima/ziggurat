@@ -1,5 +1,5 @@
-import type { CacheEntry } from "@ziggurat/core";
-import { BaseCacheAdapter } from "@ziggurat/core";
+import type { CacheEntry } from "@ziggurat-cache/core";
+import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type { Client } from "memjs";
 
 export interface MemcacheAdapterOptions {

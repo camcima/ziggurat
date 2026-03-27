@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
 import { Inject } from "@nestjs/common";
-import type { CacheManager } from "@ziggurat/core";
+import type { CacheManager } from "@ziggurat-cache/core";
 import { CACHE_MANAGER } from "./constants.js";
 
 export interface CachedDecoratorOptions {

@@ -1,13 +1,13 @@
 # API Reference
 
-## `@ziggurat/core`
+## `@ziggurat-cache/core`
 
 ### `CacheManager`
 
 The main orchestrator that manages an ordered stack of cache adapters.
 
 ```ts
-import { CacheManager } from "@ziggurat/core";
+import { CacheManager } from "@ziggurat-cache/core";
 ```
 
 #### Constructor
@@ -227,7 +227,7 @@ type TtlResult =
 Abstract class that implements `CacheAdapter` with default implementations for all extended methods. New adapters should extend this class and only implement the 4 core methods: `get`, `set`, `delete`, `clear`.
 
 ```ts
-import { BaseCacheAdapter } from "@ziggurat/core";
+import { BaseCacheAdapter } from "@ziggurat-cache/core";
 ```
 
 See [Custom Adapters](custom-adapters.md) for a guide on building your own.
@@ -239,7 +239,7 @@ See [Custom Adapters](custom-adapters.md) for a guide on building your own.
 In-process cache adapter backed by [`node-cache`](https://www.npmjs.com/package/node-cache).
 
 ```ts
-import { MemoryAdapter } from "@ziggurat/core";
+import { MemoryAdapter } from "@ziggurat-cache/core";
 ```
 
 #### Constructor
@@ -315,14 +315,14 @@ See [Custom Adapters](custom-adapters.md) for a guide on building your own. Exte
 
 ---
 
-## `@ziggurat/redis`
+## `@ziggurat-cache/redis`
 
 ### `RedisAdapter`
 
 Cache adapter for Redis using `ioredis`. Stores values as JSON strings.
 
 ```ts
-import { RedisAdapter } from "@ziggurat/redis";
+import { RedisAdapter } from "@ziggurat-cache/redis";
 ```
 
 #### Constructor
@@ -370,14 +370,14 @@ See [Redis Adapter](redis-adapter.md) for detailed usage.
 
 ---
 
-## `@ziggurat/nestjs`
+## `@ziggurat-cache/nestjs`
 
 ### `ZigguratModule`
 
 NestJS dynamic module that provides a `CacheManager` via dependency injection.
 
 ```ts
-import { ZigguratModule } from "@ziggurat/nestjs";
+import { ZigguratModule } from "@ziggurat-cache/nestjs";
 ```
 
 #### `ZigguratModule.forRoot(options: CacheManagerOptions): DynamicModule`
@@ -434,7 +434,7 @@ export class AppModule {}
 Method decorator that transparently wraps a service method with `CacheManager.wrap()`.
 
 ```ts
-import { Cached } from "@ziggurat/nestjs";
+import { Cached } from "@ziggurat-cache/nestjs";
 ```
 
 #### Signature
@@ -473,8 +473,8 @@ Injection token for the `CacheManager` instance. Use this for manual injection:
 
 ```ts
 import { Inject } from "@nestjs/common";
-import { CACHE_MANAGER } from "@ziggurat/nestjs";
-import type { CacheManager } from "@ziggurat/core";
+import { CACHE_MANAGER } from "@ziggurat-cache/nestjs";
+import type { CacheManager } from "@ziggurat-cache/core";
 
 @Injectable()
 export class MyService {
@@ -490,14 +490,14 @@ export class MyService {
 
 <a id="zigguratolel"></a>
 
-## `@ziggurat/otel`
+## `@ziggurat-cache/otel`
 
 ### `instrumentCacheManager`
 
 Connects a `CacheManager`'s event system to OpenTelemetry metrics. Requires `@opentelemetry/api` as a peer dependency — bring your own OTel SDK and exporter.
 
 ```ts
-import { instrumentCacheManager } from "@ziggurat/otel";
+import { instrumentCacheManager } from "@ziggurat-cache/otel";
 ```
 
 #### Signature
@@ -540,8 +540,8 @@ Returns a cleanup function that unsubscribes all listeners.
 #### Usage
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
-import { instrumentCacheManager } from "@ziggurat/otel";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
+import { instrumentCacheManager } from "@ziggurat-cache/otel";
 
 const cache = new CacheManager({
   layers: [new MemoryAdapter()],

@@ -1,5 +1,5 @@
 import { metrics } from "@opentelemetry/api";
-import type { CacheManager } from "@ziggurat/core";
+import type { CacheManager } from "@ziggurat-cache/core";
 
 export interface InstrumentationOptions {
   meterName?: string;

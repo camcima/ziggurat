@@ -43,7 +43,7 @@
 Every feature MUST start as a standalone, independently publishable
 package within the monorepo. Packages MUST be self-contained with
 their own entry points, type exports, and documentation. The core
-package (`@ziggurat/core`) MUST have zero framework-specific
+package (`@ziggurat-cache/core`) MUST have zero framework-specific
 dependencies. Adapter and integration packages MUST depend only on
 the core package's public API — never on its internals.
 

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-extraneous-class, @typescript-eslint/no-unsafe-argument */
 import { Module, type DynamicModule } from "@nestjs/common";
-import { CacheManager, type CacheManagerOptions } from "@ziggurat/core";
+import { CacheManager, type CacheManagerOptions } from "@ziggurat-cache/core";
 import { CACHE_MANAGER } from "./constants.js";
 
 export interface ZigguratModuleAsyncOptions {

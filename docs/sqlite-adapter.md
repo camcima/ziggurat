@@ -1,11 +1,11 @@
 # SQLite Adapter
 
-The `@ziggurat/sqlite` package provides a `SQLiteAdapter` that uses [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) to store cached values in a SQLite database. It's designed for persistent local caching that survives process restarts.
+The `@ziggurat-cache/sqlite` package provides a `SQLiteAdapter` that uses [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) to store cached values in a SQLite database. It's designed for persistent local caching that survives process restarts.
 
 ## Installation
 
 ```bash
-npm install @ziggurat/sqlite better-sqlite3
+npm install @ziggurat-cache/sqlite better-sqlite3
 ```
 
 `better-sqlite3` is a peer dependency. You create and manage the database instance.
@@ -13,8 +13,8 @@ npm install @ziggurat/sqlite better-sqlite3
 ## Basic Setup
 
 ```ts
-import { CacheManager, MemoryAdapter } from "@ziggurat/core";
-import { SQLiteAdapter } from "@ziggurat/sqlite";
+import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
+import { SQLiteAdapter } from "@ziggurat-cache/sqlite";
 import Database from "better-sqlite3";
 
 const db = new Database("./cache.db");

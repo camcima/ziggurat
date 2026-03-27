@@ -14,9 +14,9 @@
     "format:check": "prettier --check .",
     "typecheck": "turbo run typecheck",
     "test:functional": "pnpm test:functional:redis && pnpm test:functional:memcache && pnpm test:functional:sqlite",
-    "test:functional:redis": "pnpm --filter @ziggurat/redis test:functional",
-    "test:functional:memcache": "pnpm --filter @ziggurat/memcache test:functional",
-    "test:functional:sqlite": "pnpm --filter @ziggurat/sqlite test:functional"
+    "test:functional:redis": "pnpm --filter @ziggurat-cache/redis test:functional",
+    "test:functional:memcache": "pnpm --filter @ziggurat-cache/memcache test:functional",
+    "test:functional:sqlite": "pnpm --filter @ziggurat-cache/sqlite test:functional"
   },
   "devDependencies": {
     "@release-it/conventional-changelog": "^9.0.0",

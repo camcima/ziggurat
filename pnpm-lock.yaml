@@ -69,7 +69,7 @@ importers:
 
   packages/memcache:
     dependencies:
-      '@ziggurat/core':
+      '@ziggurat-cache/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -88,7 +88,7 @@ importers:
 
   packages/nestjs:
     dependencies:
-      '@ziggurat/core':
+      '@ziggurat-cache/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -119,7 +119,7 @@ importers:
 
   packages/otel:
     dependencies:
-      '@ziggurat/core':
+      '@ziggurat-cache/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -141,7 +141,7 @@ importers:
 
   packages/redis:
     dependencies:
-      '@ziggurat/core':
+      '@ziggurat-cache/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -160,7 +160,7 @@ importers:
 
   packages/sqlite:
     dependencies:
-      '@ziggurat/core':
+      '@ziggurat-cache/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

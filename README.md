@@ -175,13 +175,7 @@ pnpm format:check
 
 ## Contributing
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Write tests for your changes
-4. Ensure `pnpm test && pnpm lint` passes
-5. Submit a pull request
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, commit message conventions, and workflow guidelines.
 
 ## GitHub Topics
 

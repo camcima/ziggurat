@@ -8,3 +8,8 @@ pre-commit:
     - name: format
       glob: "*.{js,ts,jsx,tsx,json,yml,yaml,md}"
       run: pnpm prettier --check {staged_files}
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: pnpm commitlint --edit {1}

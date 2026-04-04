@@ -19,6 +19,8 @@
     "test:functional:sqlite": "pnpm --filter @ziggurat-cache/sqlite test:functional"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "@release-it/conventional-changelog": "^9.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",

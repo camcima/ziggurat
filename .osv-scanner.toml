@@ -1,0 +1,38 @@
+# OSV-Scanner ignores dev-only transitive dependencies.
+# These packages are not shipped to production.
+
+[[PackageOverrides]]
+name = "undici"
+ecosystem = "npm"
+ignore = true
+reason = "Dev-only transitive dep (release-it)"
+
+[[PackageOverrides]]
+name = "tar"
+ecosystem = "npm"
+ignore = true
+reason = "Dev-only transitive dep (release-it-pnpm > giget)"
+
+[[PackageOverrides]]
+name = "lodash"
+ecosystem = "npm"
+ignore = true
+reason = "Dev-only transitive dep (release-it)"
+
+[[PackageOverrides]]
+name = "esbuild"
+ecosystem = "npm"
+ignore = true
+reason = "Dev-only transitive dep (vitest > vite)"
+
+[[PackageOverrides]]
+name = "file-type"
+ecosystem = "npm"
+ignore = true
+reason = "Dev-only transitive dep (release-it-pnpm)"
+
+[[PackageOverrides]]
+name = "@conventional-changelog/git-client"
+ecosystem = "npm"
+ignore = true
+reason = "Dev-only transitive dep (commitlint, release-it)"

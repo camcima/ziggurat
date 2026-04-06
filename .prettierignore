@@ -7,3 +7,4 @@ pnpm-lock.yaml
 .specify/
 specs/
 initial_spec.md
+CHANGELOG.md

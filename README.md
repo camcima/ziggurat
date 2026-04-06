@@ -6,7 +6,7 @@
 
 <br>
 
-[![CI](https://github.com/camcima/ziggurat/actions/workflows/ci.yml/badge.svg)](https://github.com/camcima/ziggurat/actions/workflows/ci.yml)
+[![CI](https://github.com/camcima/ziggurat/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/camcima/ziggurat/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/camcima/ziggurat/graph/badge.svg)](https://codecov.io/gh/camcima/ziggurat)
 [![npm version](https://img.shields.io/npm/v/@ziggurat-cache/core)](https://www.npmjs.com/package/@ziggurat-cache/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

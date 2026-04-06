@@ -9,6 +9,7 @@
 [![Test](https://github.com/camcima/ziggurat/actions/workflows/test.yml/badge.svg)](https://github.com/camcima/ziggurat/actions/workflows/test.yml)
 [![Functional Tests](https://github.com/camcima/ziggurat/actions/workflows/functional-tests.yml/badge.svg)](https://github.com/camcima/ziggurat/actions/workflows/functional-tests.yml)
 [![codecov](https://codecov.io/gh/camcima/ziggurat/graph/badge.svg)](https://codecov.io/gh/camcima/ziggurat)
+[![CodeQL](https://github.com/camcima/ziggurat/actions/workflows/codeql.yml/badge.svg)](https://github.com/camcima/ziggurat/actions/workflows/codeql.yml)
 [![npm version](https://img.shields.io/npm/v/@ziggurat-cache/core)](https://www.npmjs.com/package/@ziggurat-cache/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5%2B-blue.svg)](https://www.typescriptlang.org/)
@@ -171,6 +172,40 @@ pnpm test
 # Lint and format
 pnpm lint
 pnpm format:check
+```
+
+## Security
+
+### CI
+
+| Tool            | Purpose                                                  | Workflow                          |
+| --------------- | -------------------------------------------------------- | --------------------------------- |
+| **CodeQL**      | Static analysis for security vulnerabilities             | `codeql.yml` — push, PR, weekly   |
+| **OSV-Scanner** | Dependency vulnerability scanning (production deps only) | `security.yml` — push, PR, weekly |
+| **Semgrep**     | Code security patterns and bug detection                 | `security.yml` — push, PR, weekly |
+| **Dependabot**  | Automated dependency and Actions updates                 | `dependabot.yml` — weekly PRs     |
+
+### Local (Lefthook)
+
+**Gitleaks** runs automatically on every commit via Lefthook, scanning staged files for secrets. Requires [Gitleaks](https://github.com/gitleaks/gitleaks#installing) installed locally.
+
+### Manual Local Checks
+
+```bash
+# Run all local security checks
+pnpm security
+
+# Dependency audit (production only)
+pnpm security:audit
+
+# Full dependency audit (all deps)
+pnpm audit
+
+# Secret scanning
+pnpm security:secrets
+
+# Gitleaks on staged files only
+gitleaks protect --staged --no-banner
 ```
 
 ## Contributing

@@ -16,7 +16,10 @@
     "test:functional": "pnpm test:functional:redis && pnpm test:functional:memcache && pnpm test:functional:sqlite",
     "test:functional:redis": "pnpm --filter @ziggurat-cache/redis test:functional",
     "test:functional:memcache": "pnpm --filter @ziggurat-cache/memcache test:functional",
-    "test:functional:sqlite": "pnpm --filter @ziggurat-cache/sqlite test:functional"
+    "test:functional:sqlite": "pnpm --filter @ziggurat-cache/sqlite test:functional",
+    "security:audit": "pnpm audit --prod",
+    "security:secrets": "gitleaks detect --no-banner",
+    "security": "pnpm security:audit && pnpm security:secrets"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",

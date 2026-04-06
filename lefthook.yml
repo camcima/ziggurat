@@ -9,6 +9,9 @@ pre-commit:
       glob: "*.{js,ts,jsx,tsx,json,yml,yaml,md}"
       run: pnpm prettier --check {staged_files}
 
+    - name: secrets
+      run: gitleaks protect --staged --no-banner
+
 commit-msg:
   jobs:
     - name: commitlint

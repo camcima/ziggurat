@@ -13,34 +13,10 @@ permissions:
   security-events: write
 
 jobs:
-  ci:
+  validate:
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      memcache:
-        image: memcached:1
-        ports:
-          - 11211:11211
-        options: >-
-          --health-cmd "bash -c ': > /dev/tcp/localhost/11211'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
-
-      - uses: github/codeql-action/init@v3
-        with:
-          languages: javascript-typescript
-
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -48,46 +24,118 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
 
-      # Validation
-      - name: Lint
-        run: pnpm lint
-      - name: Format check
-        run: pnpm format:check
-      - name: Typecheck
-        run: pnpm typecheck
-
-      # Unit tests
-      - name: Test
-        run: pnpm test:coverage
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test:coverage
+      - uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: packages/core/coverage/coverage-final.json,packages/redis/coverage/coverage-final.json,packages/memcache/coverage/coverage-final.json,packages/sqlite/coverage/coverage-final.json,packages/nestjs/coverage/coverage-final.json
           flags: unit
           fail_ci_if_error: true
 
-      # Functional tests
-      - name: Functional tests (Redis)
-        run: pnpm test:functional:redis
+  functional:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: redis
+            service-image: redis:7
+            service-port: 6379
+            health-cmd: redis-cli ping
+            env-var: REDIS_URL
+            env-value: redis://localhost:6379
+            test-cmd: pnpm test:functional:redis
+          - backend: memcache
+            service-image: memcached:1
+            service-port: 11211
+            health-cmd: "bash -c ': > /dev/tcp/localhost/11211'"
+            env-var: MEMCACHE_URL
+            env-value: localhost:11211
+            test-cmd: pnpm test:functional:memcache
+    name: functional (${{ matrix.backend }})
+    services:
+      backend:
+        image: ${{ matrix.service-image }}
+        ports:
+          - ${{ matrix.service-port }}:${{ matrix.service-port }}
+        options: >-
+          --health-cmd "${{ matrix.health-cmd }}"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run ${{ matrix.backend }} functional tests
+        run: ${{ matrix.test-cmd }}
         env:
-          REDIS_URL: redis://localhost:6379
-      - name: Functional tests (Memcache)
-        run: pnpm test:functional:memcache
-        env:
-          MEMCACHE_URL: localhost:11211
-      - name: Functional tests (SQLite)
-        run: pnpm test:functional:sqlite
+          ${{ matrix.env-var }}: ${{ matrix.env-value }}
 
-      # Security
-      - name: CodeQL analysis
-        uses: github/codeql-action/analyze@v3
-      - name: OSV-Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2.3.5
+  functional-sqlite:
+    runs-on: ubuntu-latest
+    name: functional (sqlite)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test:functional:sqlite
+
+  codeql:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
+
+  osv-scanner:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.3.5
         with:
           scan-args: |-
             --recursive
             .
-      - name: Semgrep
-        run: pip3 install -q semgrep && semgrep scan --config auto --error .
+
+  semgrep:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - run: semgrep scan --config auto --error .

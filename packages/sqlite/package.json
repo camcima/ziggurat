@@ -51,13 +51,13 @@
     "@ziggurat-cache/core": "workspace:*"
   },
   "peerDependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^12.8.0",
     "@types/better-sqlite3": "^7.6.0",
-    "typescript": "^5.5.0",
+    "typescript": "^6.0.2",
     "tsup": "^8.0.0",
-    "vitest": "^2.0.0"
+    "vitest": "^4.1.2"
   }
 }

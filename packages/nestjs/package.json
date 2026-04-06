@@ -48,18 +48,18 @@
     "@ziggurat-cache/core": "workspace:*"
   },
   "peerDependencies": {
-    "@nestjs/common": "^10.0.0",
-    "@nestjs/core": "^10.0.0",
+    "@nestjs/common": "^11.1.18",
+    "@nestjs/core": "^11.1.18",
     "reflect-metadata": "^0.2.0"
   },
   "devDependencies": {
-    "@nestjs/common": "^10.0.0",
-    "@nestjs/core": "^10.0.0",
-    "@nestjs/testing": "^10.0.0",
+    "@nestjs/common": "^11.1.18",
+    "@nestjs/core": "^11.1.18",
+    "@nestjs/testing": "^11.1.18",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
-    "typescript": "^5.5.0",
+    "typescript": "^6.0.2",
     "tsup": "^8.0.0",
-    "vitest": "^2.0.0"
+    "vitest": "^4.1.2"
   }
 }

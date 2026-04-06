@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1" # Weekly Monday 06:00 UTC
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      memcache:
+        image: memcached:1
+        ports:
+          - 11211:11211
+        options: >-
+          --health-cmd "bash -c ': > /dev/tcp/localhost/11211'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      # Validation
+      - name: Lint
+        run: pnpm lint
+      - name: Format check
+        run: pnpm format:check
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Unit tests
+      - name: Test
+        run: pnpm test:coverage
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: packages/core/coverage/coverage-final.json,packages/redis/coverage/coverage-final.json,packages/memcache/coverage/coverage-final.json,packages/sqlite/coverage/coverage-final.json,packages/nestjs/coverage/coverage-final.json
+          flags: unit
+          fail_ci_if_error: true
+
+      # Functional tests
+      - name: Functional tests (Redis)
+        run: pnpm test:functional:redis
+        env:
+          REDIS_URL: redis://localhost:6379
+      - name: Functional tests (Memcache)
+        run: pnpm test:functional:memcache
+        env:
+          MEMCACHE_URL: localhost:11211
+      - name: Functional tests (SQLite)
+        run: pnpm test:functional:sqlite
+
+      # Security
+      - name: CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+      - name: OSV-Scanner
+        uses: google/osv-scanner-action@v2
+        with:
+          scan-args: |-
+            --recursive
+            --no-dev
+            .
+      - name: Semgrep
+        run: pip3 install -q semgrep && semgrep scan --config auto --error .

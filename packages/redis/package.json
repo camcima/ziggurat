@@ -1,6 +1,6 @@
 {
   "name": "@ziggurat-cache/redis",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Redis adapter for @ziggurat-cache/core multi-layer cache",
   "license": "MIT",
   "repository": {

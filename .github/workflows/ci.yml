@@ -40,7 +40,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test:coverage
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: packages/core/coverage/coverage-final.json,packages/redis/coverage/coverage-final.json,packages/memcache/coverage/coverage-final.json,packages/sqlite/coverage/coverage-final.json,packages/nestjs/coverage/coverage-final.json

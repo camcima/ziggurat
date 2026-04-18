@@ -30,3 +30,7 @@ Thumbs.db
 # Lock files (keep pnpm-lock.yaml)
 package-lock.json
 yarn.lock
+
+# Agent / spec tooling (local only)
+.claude/
+.specify/

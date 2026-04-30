@@ -150,7 +150,7 @@ See the [docs](docs/) directory for detailed guides:
 
 ## Requirements
 
-- Node.js >= 18
+- Node.js >= 20
 - TypeScript >= 5.x (recommended)
 
 ## Development

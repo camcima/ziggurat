@@ -100,9 +100,7 @@ export class RedisAdapter extends BaseCacheAdapter {
         pipeline.del(key);
       }
       const results = await pipeline.exec();
-      this.checkPipelineErrors(
-        results as Array<[Error | null, unknown]> | null,
-      );
+      this.checkPipelineErrors(results);
     }
   }
 
@@ -162,7 +160,7 @@ export class RedisAdapter extends BaseCacheAdapter {
     }
     if (queued === 0) return;
     const results = await pipeline.exec();
-    this.checkPipelineErrors(results as Array<[Error | null, unknown]> | null);
+    this.checkPipelineErrors(results);
   }
 
   async mdel(keys: readonly string[]): Promise<void> {

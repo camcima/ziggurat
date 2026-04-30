@@ -12,9 +12,9 @@ export class TypedEventEmitter<TEventMap extends Record<string, unknown>> {
       set = new Set();
       this.listeners.set(event, set);
     }
-    set.add(listener as Listener<never>);
+    set.add(listener);
     return () => {
-      set.delete(listener as Listener<never>);
+      set.delete(listener);
     };
   }
 

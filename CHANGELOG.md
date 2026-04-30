@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.3](https://github.com/camcima/ziggurat/compare/v0.1.2...v0.1.3) (2026-04-30)
+
+### Bug Fixes
+
+* **lint:** drop redundant type assertions flagged by typescript-eslint 8.59 ([27da5ac](https://github.com/camcima/ziggurat/commit/27da5ac3c57f32205057266dc6ff19b2771d90d9))
+
 ## [0.1.2](https://github.com/camcima/ziggurat/compare/v0.1.1...v0.1.2) (2026-04-06)
 
 ### Bug Fixes

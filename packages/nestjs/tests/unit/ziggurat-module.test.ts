@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { describe, it, expect } from "vitest";
 import { Test } from "@nestjs/testing";
-import { Injectable, Module } from "@nestjs/common";
+import { Inject, Injectable, Module } from "@nestjs/common";
 import { ZigguratModule } from "../../src/ziggurat.module.js";
 import { CACHE_MANAGER } from "../../src/constants.js";
 import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
@@ -84,7 +84,7 @@ describe("ZigguratModule", () => {
       @Injectable()
       class TestService {
         constructor(
-          @((await import("@nestjs/common")).Inject(CACHE_MANAGER))
+          @Inject(CACHE_MANAGER)
           public readonly cache: CacheManager,
         ) {}
       }

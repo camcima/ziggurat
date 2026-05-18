@@ -53,13 +53,13 @@
     "reflect-metadata": "^0.2.0"
   },
   "devDependencies": {
-    "@nestjs/common": "^11.1.18",
-    "@nestjs/core": "^11.1.18",
-    "@nestjs/testing": "^11.1.18",
+    "@nestjs/common": "^11.1.21",
+    "@nestjs/core": "^11.1.21",
+    "@nestjs/testing": "^11.1.21",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.6"
   }
 }

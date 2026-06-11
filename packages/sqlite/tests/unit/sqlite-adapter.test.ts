@@ -313,6 +313,43 @@ describe("SQLiteAdapter", () => {
     });
   });
 
+  describe("purgeExpired", () => {
+    it("deletes expired rows for this namespace and returns the count", async () => {
+      const a = new SQLiteAdapter({ db });
+      await a.set("expired1", "v", 1);
+      await a.set("expired2", "v", 1);
+      await a.set("alive", "v", 60_000);
+      await a.set("permanent", "v");
+      await new Promise((r) => setTimeout(r, 50));
+
+      const purged = await a.purgeExpired();
+
+      expect(purged).toBe(2);
+      expect(await a.has("alive")).toBe(true);
+      expect(await a.has("permanent")).toBe(true);
+    });
+
+    it("does not purge other namespaces", async () => {
+      const a = new SQLiteAdapter({ db, namespace: "a" });
+      const b = new SQLiteAdapter({ db, namespace: "b" });
+      await a.set("k", "v", 1);
+      await b.set("k", "v", 1);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(await a.purgeExpired()).toBe(1);
+      expect(await b.purgeExpired()).toBe(1);
+    });
+
+    it("returns 0 when there are no expired rows", async () => {
+      const a = new SQLiteAdapter({ db });
+      await a.set("alive", "v", 60_000);
+      await a.set("permanent", "v");
+      expect(await a.purgeExpired()).toBe(0);
+      expect(await a.has("alive")).toBe(true);
+      expect(await a.has("permanent")).toBe(true);
+    });
+  });
+
   describe("defaultTtlMs", () => {
     it("should use defaultTtlMs when no ttlMs is passed", async () => {
       const a = new SQLiteAdapter({ db, defaultTtlMs: 5000 });

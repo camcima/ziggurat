@@ -27,6 +27,7 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   private readonly stmtGetTtl: Database.Statement;
   private readonly stmtKeys: Database.Statement;
   private readonly stmtFlushAll: Database.Statement;
+  private readonly stmtPurge: Database.Statement;
 
   private static validateTableName(name: string): void {
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
@@ -86,6 +87,9 @@ export class SQLiteAdapter extends BaseCacheAdapter {
       `SELECT key FROM ${this.tableName} WHERE namespace = ? AND (expires_at IS NULL OR expires_at > ?)`,
     );
     this.stmtFlushAll = this.db.prepare(`DELETE FROM ${this.tableName}`);
+    this.stmtPurge = this.db.prepare(
+      `DELETE FROM ${this.tableName} WHERE namespace = ? AND expires_at IS NOT NULL AND expires_at <= ?`,
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
@@ -218,5 +222,16 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   // eslint-disable-next-line @typescript-eslint/require-await
   async flushAll(): Promise<void> {
     this.stmtFlushAll.run();
+  }
+
+  /**
+   * Delete all expired rows for this adapter's namespace and return the
+   * number of rows removed. Expired rows are otherwise only cleaned up
+   * lazily on access — call this periodically in long-running processes.
+   */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async purgeExpired(): Promise<number> {
+    const result = this.stmtPurge.run(this.namespace, Date.now());
+    return result.changes;
   }
 }

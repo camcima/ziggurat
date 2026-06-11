@@ -6,5 +6,6 @@ pnpm-lock.yaml
 .claude/
 .specify/
 specs/
+docs/superpowers/
 initial_spec.md
 CHANGELOG.md

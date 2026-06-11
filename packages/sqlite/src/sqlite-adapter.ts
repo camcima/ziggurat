@@ -7,6 +7,19 @@ import type {
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type Database from "better-sqlite3";
 
+// Max keys per IN(...) chunk. SQLite caps bound params at 999 (older
+// builds) / 32766 (modern). mget binds batch.length + 2 (namespace, now);
+// mdel binds batch.length + 1 (namespace). 900 stays safe under 999.
+const MAX_BATCH_PARAMS = 900;
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
+
 export interface SQLiteAdapterOptions extends AdapterTtlOptions {
   db: Database.Database;
   tableName?: string;
@@ -167,23 +180,23 @@ export class SQLiteAdapter extends BaseCacheAdapter {
     if (keys.length === 0) return new Map();
 
     const now = Date.now();
-    const placeholders = keys.map(() => "?").join(",");
-    const stmt = this.db.prepare(
-      `SELECT key, value, expires_at FROM ${this.tableName}
-       WHERE namespace = ? AND key IN (${placeholders})
-       AND (expires_at IS NULL OR expires_at > ?)`,
-    );
-    const params = [this.namespace, ...keys, now];
-    const rows = stmt.all(...params) as Array<{
-      key: string;
-      value: string;
-      expires_at: number | null;
-    }>;
-
     const result = new Map<string, CacheEntry<T>>();
-    for (const row of rows) {
-      const parsed = JSON.parse(row.value) as T;
-      result.set(row.key, { value: parsed, expiresAt: row.expires_at });
+    for (const batch of chunk(keys, MAX_BATCH_PARAMS)) {
+      const placeholders = batch.map(() => "?").join(",");
+      const stmt = this.db.prepare(
+        `SELECT key, value, expires_at FROM ${this.tableName}
+         WHERE namespace = ? AND key IN (${placeholders})
+         AND (expires_at IS NULL OR expires_at > ?)`,
+      );
+      const rows = stmt.all(this.namespace, ...batch, now) as Array<{
+        key: string;
+        value: string;
+        expires_at: number | null;
+      }>;
+      for (const row of rows) {
+        const parsed = JSON.parse(row.value) as T;
+        result.set(row.key, { value: parsed, expiresAt: row.expires_at });
+      }
     }
     return result;
   }
@@ -212,11 +225,16 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   async mdel(keys: readonly string[]): Promise<void> {
     if (keys.length === 0) return;
 
-    const placeholders = keys.map(() => "?").join(",");
-    const stmt = this.db.prepare(
-      `DELETE FROM ${this.tableName} WHERE namespace = ? AND key IN (${placeholders})`,
-    );
-    stmt.run(this.namespace, ...keys);
+    const deleteMany = this.db.transaction((batches: string[][]) => {
+      for (const batch of batches) {
+        const placeholders = batch.map(() => "?").join(",");
+        const stmt = this.db.prepare(
+          `DELETE FROM ${this.tableName} WHERE namespace = ? AND key IN (${placeholders})`,
+        );
+        stmt.run(this.namespace, ...batch);
+      }
+    });
+    deleteMany(chunk(keys, MAX_BATCH_PARAMS));
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await

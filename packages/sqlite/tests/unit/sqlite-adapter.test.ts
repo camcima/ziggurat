@@ -350,6 +350,28 @@ describe("SQLiteAdapter", () => {
     });
   });
 
+  describe("large batches", () => {
+    it("handles mget/mdel with more keys than SQLite's bind-variable limit", async () => {
+      const a = new SQLiteAdapter({ db });
+      const keys = Array.from(
+        { length: 40_000 },
+        (_, i) => `bulk:${String(i)}`,
+      );
+      await a.mset(keys.map((key) => ({ key, value: key })));
+
+      const fetched = await a.mget(keys);
+      expect(fetched.size).toBe(40_000);
+
+      // keys straddling chunk boundaries (size 900) must all be retrieved
+      expect(fetched.get("bulk:899")).toBeDefined();
+      expect(fetched.get("bulk:900")).toBeDefined();
+      expect(fetched.get("bulk:1800")).toBeDefined();
+
+      await a.mdel(keys);
+      expect((await a.mget(keys.slice(0, 10))).size).toBe(0);
+    });
+  });
+
   describe("defaultTtlMs", () => {
     it("should use defaultTtlMs when no ttlMs is passed", async () => {
       const a = new SQLiteAdapter({ db, defaultTtlMs: 5000 });

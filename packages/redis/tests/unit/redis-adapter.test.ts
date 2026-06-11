@@ -367,6 +367,16 @@ describe("RedisAdapter", () => {
     });
   });
 
+  describe("glob escaping", () => {
+    it("escapes glob metacharacters in the prefix for clear()", async () => {
+      const adapter = new RedisAdapter({ client: mockRedis, prefix: "a*b:" });
+      await adapter.set("k", "v");
+      await adapter.clear();
+      const scanCalls = (mockRedis.scan as ReturnType<typeof vi.fn>).mock.calls;
+      expect(scanCalls[0][2]).toBe("a\\*b:*");
+    });
+  });
+
   describe("prefix support", () => {
     it("should prepend prefix to all keys", async () => {
       const prefixedAdapter = new RedisAdapter({

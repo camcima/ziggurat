@@ -60,6 +60,10 @@ export class RedisAdapter extends BaseCacheAdapter {
     await this.client.del(this.prefixedKey(key));
   }
 
+  private static escapeGlob(literal: string): string {
+    return literal.replace(/[\\*?[\]]/g, "\\$&");
+  }
+
   private async scanKeys(pattern: string): Promise<string[]> {
     const keys: string[] = [];
     let cursor = "0";
@@ -93,7 +97,7 @@ export class RedisAdapter extends BaseCacheAdapter {
   }
 
   async clear(): Promise<void> {
-    const pattern = this.prefix + "*";
+    const pattern = RedisAdapter.escapeGlob(this.prefix) + "*";
     const keys = await this.scanKeys(pattern);
     if (keys.length > 0) {
       const pipeline = this.client.pipeline();
@@ -106,7 +110,7 @@ export class RedisAdapter extends BaseCacheAdapter {
   }
 
   async keys(): Promise<string[]> {
-    const pattern = this.prefix + "*";
+    const pattern = RedisAdapter.escapeGlob(this.prefix) + "*";
     const rawKeys = await this.scanKeys(pattern);
     return rawKeys.map((k) => (this.prefix ? k.slice(this.prefix.length) : k));
   }

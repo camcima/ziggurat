@@ -87,7 +87,8 @@ export interface CacheErrorEvent {
     | "getTtl"
     | "mget"
     | "mset"
-    | "mdel";
+    | "mdel"
+    | "backfill";
   layerName: string;
   layerIndex: number;
   error: unknown;

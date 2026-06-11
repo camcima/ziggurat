@@ -546,6 +546,79 @@ describe("CacheManager events", () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].operation).toBe("getTtl");
     });
+
+    it("should emit error event when a backfill write fails on get", async () => {
+      const l1 = new MemoryAdapter();
+      vi.spyOn(l1, "set").mockRejectedValue(new Error("l1 down"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k", "v");
+      const cache = new CacheManager({ layers: [l1, l2], syncBackfill: true });
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const entry = await cache.get("k");
+
+      expect(entry?.value).toBe("v");
+      expect(errors).toHaveLength(1);
+      expect(errors[0].operation).toBe("backfill");
+      expect(errors[0].layerName).toBe("memory");
+      expect(errors[0].layerIndex).toBe(0);
+    });
+
+    it("should emit error event when a backfill write fails on mget", async () => {
+      const l1 = new MemoryAdapter();
+      vi.spyOn(l1, "mset").mockRejectedValue(new Error("l1 down"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k1", "v1");
+      const cache = new CacheManager({ layers: [l1, l2], syncBackfill: true });
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const result = await cache.mget(["k1"]);
+
+      expect(result.get("k1")?.value).toBe("v1");
+      expect(errors).toHaveLength(1);
+      expect(errors[0].operation).toBe("backfill");
+      expect(errors[0].key).toBe("k1");
+    });
+
+    it("should emit backfill error on the async (fire-and-forget) get path", async () => {
+      const l1 = new MemoryAdapter();
+      vi.spyOn(l1, "set").mockRejectedValue(new Error("l1 down"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k", "v");
+      const cache = new CacheManager({ layers: [l1, l2] }); // syncBackfill defaults to false
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const entry = await cache.get("k");
+      expect(entry?.value).toBe("v");
+
+      await vi.waitFor(() => {
+        expect(errors).toHaveLength(1);
+      });
+      expect(errors[0].operation).toBe("backfill");
+      expect(errors[0].layerIndex).toBe(0);
+    });
+
+    it("should emit backfill error on the async (fire-and-forget) mget path", async () => {
+      const l1 = new MemoryAdapter();
+      vi.spyOn(l1, "mset").mockRejectedValue(new Error("l1 down"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k1", "v1");
+      const cache = new CacheManager({ layers: [l1, l2] });
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const result = await cache.mget(["k1"]);
+      expect(result.get("k1")?.value).toBe("v1");
+
+      await vi.waitFor(() => {
+        expect(errors).toHaveLength(1);
+      });
+      expect(errors[0].operation).toBe("backfill");
+      expect(errors[0].key).toBe("k1");
+    });
   });
 
   describe("backfill", () => {

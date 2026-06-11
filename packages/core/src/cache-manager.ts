@@ -88,11 +88,14 @@ export class CacheManager {
             entry.expiresAt !== null
               ? Math.max(0, entry.expiresAt - Date.now())
               : undefined;
+          // backfillLayers === this.layers.slice(0, i), so results[] indices align with emitWriteErrors' this.layers[] indexing
           const backfillPromise = Promise.allSettled(
             backfillLayers.map((layer) =>
               layer.set(nsKey, entry.value, remainingTtlMs),
             ),
-          );
+          ).then((results) => {
+            this.emitWriteErrors(results, key, "backfill");
+          });
           if (shouldEmit) {
             this.events.emit("backfill", {
               key,
@@ -287,9 +290,15 @@ export class CacheManager {
               ? Math.max(0, entry.expiresAt - Date.now())
               : undefined,
         }));
+        const backfillKeys = foundInThisLayer
+          .map(({ nsKey }) => keyMap.get(nsKey))
+          .filter((k): k is string => k !== undefined);
+        // backfillLayers === this.layers.slice(0, i), so results[] indices align with emitWriteErrors' this.layers[] indexing
         const backfillPromise = Promise.allSettled(
           backfillLayers.map((layer) => layer.mset(backfillEntries)),
-        );
+        ).then((results) => {
+          this.emitWriteErrors(results, backfillKeys.join(","), "backfill");
+        });
         if (shouldEmit) {
           for (const { nsKey } of foundInThisLayer) {
             const originalKey = keyMap.get(nsKey);

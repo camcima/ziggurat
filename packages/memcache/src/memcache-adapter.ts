@@ -7,6 +7,10 @@ export interface MemcacheAdapterOptions extends AdapterTtlOptions {
   prefix?: string;
 }
 
+// Memcached interprets relative `expires` values above 30 days as an
+// absolute unix timestamp, so larger TTLs must be sent as one.
+const MEMCACHE_MAX_RELATIVE_EXPIRES_SEC = 60 * 60 * 24 * 30;
+
 export class MemcacheAdapter extends BaseCacheAdapter {
   readonly name = "memcache";
   private readonly client: Client;
@@ -45,9 +49,15 @@ export class MemcacheAdapter extends BaseCacheAdapter {
     const serialized = JSON.stringify({ value, expiresAt });
     const prefixed = this.prefixedKey(key);
 
-    // Memcached TTL is in seconds; 0 means no expiration
-    const expiresSec =
-      effectiveTtl !== undefined ? Math.ceil(effectiveTtl / 1000) : 0;
+    // Memcached TTL is in seconds; 0 means no expiration.
+    let expiresSec = 0;
+    if (effectiveTtl !== undefined) {
+      expiresSec = Math.ceil(effectiveTtl / 1000);
+      if (expiresSec > MEMCACHE_MAX_RELATIVE_EXPIRES_SEC) {
+        // Send as an absolute unix timestamp (seconds) for >30-day TTLs.
+        expiresSec = Math.ceil((Date.now() + effectiveTtl) / 1000);
+      }
+    }
     await this.client.set(prefixed, serialized, { expires: expiresSec });
   }
 

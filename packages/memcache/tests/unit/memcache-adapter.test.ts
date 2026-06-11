@@ -160,6 +160,23 @@ describe("MemcacheAdapter", () => {
     });
   });
 
+  describe("TTLs over 30 days", () => {
+    it("converts TTLs over 30 days to an absolute unix timestamp", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-06-11T00:00:00Z"));
+      try {
+        const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+        await adapter.set("k", "v", sixtyDaysMs);
+        const expectedAbsolute = Math.ceil((Date.now() + sixtyDaysMs) / 1000);
+        expect(mockClient.set).toHaveBeenCalledWith("k", expect.any(String), {
+          expires: expectedAbsolute,
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   describe("defaultTtlMs", () => {
     it("should use defaultTtlMs when no ttlMs is passed", async () => {
       const a = new MemcacheAdapter({

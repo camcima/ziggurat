@@ -44,13 +44,14 @@ export class RedisAdapter extends BaseCacheAdapter {
     const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
-    const expiresAt =
-      effectiveTtl !== undefined ? Date.now() + effectiveTtl : null;
+    const ttlInt =
+      effectiveTtl !== undefined ? Math.ceil(effectiveTtl) : undefined;
+    const expiresAt = ttlInt !== undefined ? Date.now() + ttlInt : null;
     const serialized = JSON.stringify({ value, expiresAt });
     const prefixed = this.prefixedKey(key);
 
-    if (effectiveTtl !== undefined) {
-      await this.client.psetex(prefixed, effectiveTtl, serialized);
+    if (ttlInt !== undefined) {
+      await this.client.psetex(prefixed, ttlInt, serialized);
     } else {
       await this.client.set(prefixed, serialized);
     }
@@ -151,13 +152,14 @@ export class RedisAdapter extends BaseCacheAdapter {
       const effectiveTtl = this.resolveTtl(entry.ttlMs);
       // ttlMs <= 0 means already expired — don't store
       if (effectiveTtl !== undefined && effectiveTtl <= 0) continue;
-      const expiresAt =
-        effectiveTtl !== undefined ? Date.now() + effectiveTtl : null;
+      const ttlInt =
+        effectiveTtl !== undefined ? Math.ceil(effectiveTtl) : undefined;
+      const expiresAt = ttlInt !== undefined ? Date.now() + ttlInt : null;
       const serialized = JSON.stringify({ value: entry.value, expiresAt });
       const prefixed = this.prefixedKey(entry.key);
 
-      if (effectiveTtl !== undefined) {
-        pipeline.psetex(prefixed, effectiveTtl, serialized);
+      if (ttlInt !== undefined) {
+        pipeline.psetex(prefixed, ttlInt, serialized);
       } else {
         pipeline.set(prefixed, serialized);
       }

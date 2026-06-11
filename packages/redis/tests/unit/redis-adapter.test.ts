@@ -144,6 +144,15 @@ describe("RedisAdapter", () => {
       const stored = JSON.parse(call[1] as string);
       expect(stored.value).toEqual({ nested: { data: [1, 2] } });
     });
+
+    it("rounds fractional ttlMs up to an integer for PSETEX", async () => {
+      await adapter.set("k", "v", 1500.5);
+      expect(mockRedis.psetex).toHaveBeenCalledWith(
+        "k",
+        1501,
+        expect.any(String),
+      );
+    });
   });
 
   describe("delete", () => {
@@ -335,6 +344,15 @@ describe("RedisAdapter", () => {
       );
       await cappedAdapter.mset([{ key: "k", value: "v", ttlMs: 60_000 }]);
       expect(pipe.psetex).toHaveBeenCalledWith("k", 5000, expect.any(String));
+    });
+
+    it("rounds fractional ttlMs up to an integer in mset pipeline", async () => {
+      const pipe = mockRedis.pipeline();
+      (mockRedis.pipeline as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        pipe,
+      );
+      await adapter.mset([{ key: "k", value: "v", ttlMs: 1500.5 }]);
+      expect(pipe.psetex).toHaveBeenCalledWith("k", 1501, expect.any(String));
     });
   });
 

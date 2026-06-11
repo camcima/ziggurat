@@ -323,6 +323,21 @@ async function getUserProfile(id: string) {
 }
 ```
 
+## Write-failure visibility and strictWrites
+
+By default, `set`/`mset`/`delete`/`mdel` never throw — a layer failure (or even all layers failing) is only observable through `"error"` events, so register an error listener in production. To make a **total** write failure throw instead, enable strict writes:
+
+```ts
+const cache = new CacheManager({ layers, strictWrites: true });
+// throws AggregateError if every layer rejects the write
+```
+
+`strictWrites` applies to direct `set`/`mset`/`delete`/`mdel` calls. `wrap()` is unaffected: it always returns the value your factory computed, even if caching that value fails — the write error still surfaces via `"error"` events. In a single-layer setup, any write failure means "every layer failed", so it throws.
+
+## Value fidelity across layers
+
+`MemoryAdapter` stores live references by default, while the Redis, SQLite, and Memcache adapters JSON round-trip values. A `Date` survives an L1 hit but comes back as an ISO string when L2 serves the same key. If you cache rich types in a multi-layer setup, either store plain JSON-safe data or set `new MemoryAdapter({ serialization: "json" })` for consistent shapes (this also prevents callers from mutating cached objects in place). Note that in `json` mode, non-serializable values (functions, circular references) throw at `set()` time and `undefined` is not stored.
+
 ## Memory Management
 
 ### TTL-Based Expiration
@@ -342,6 +357,11 @@ const configCache = new MemoryAdapter();
 // Better: unbounded user IDs with TTL-based cleanup
 const userCache = new MemoryAdapter({ defaultTtlMs: 60_000 });
 ```
+
+### Memory growth
+
+- `MemoryAdapter`: expired entries are evicted lazily on access. For write-heavy workloads set `checkPeriodMs` (periodic eviction) and/or `maxKeys`; call `close()` on shutdown if `checkPeriodMs` is set.
+- `SQLiteAdapter`: expired rows are removed lazily on access. Call `purgeExpired()` periodically in long-running processes.
 
 ## Performance Tips
 

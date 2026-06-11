@@ -31,11 +31,12 @@ const cache = new CacheManager({
 
 ### `RedisAdapterOptions`
 
-| Property       | Type     | Default      | Description                                                                     |
-| -------------- | -------- | ------------ | ------------------------------------------------------------------------------- |
-| `client`       | `Redis`  | _(required)_ | A configured ioredis client instance.                                           |
-| `prefix`       | `string` | `""`         | String prepended to all keys for infrastructure-level isolation.                |
-| `defaultTtlMs` | `number` | _none_       | Default TTL in milliseconds. Takes precedence over TTL passed via `set`/`wrap`. |
+| Property       | Type     | Default      | Description                                                                                                                                    |
+| -------------- | -------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client`       | `Redis`  | _(required)_ | A configured ioredis client instance.                                                                                                          |
+| `prefix`       | `string` | `""`         | String prepended to all keys for infrastructure-level isolation.                                                                               |
+| `defaultTtlMs` | `number` | _none_       | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
+| `maxTtlMs`     | `number` | _none_       | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
 
 ### Key Prefixing
 
@@ -56,6 +57,8 @@ const productCache = new RedisAdapter({
 When you call `userCache.set("42", userData)`, the actual Redis key is `myapp:users:42`.
 
 The `clear()` method only deletes keys matching the adapter's prefix, so different prefixes are fully isolated.
+
+`clear()` and `flushAll()` both delete only keys under the adapter's `prefix`, using incremental `SCAN` (never `FLUSHDB`). With an empty prefix this still scans and deletes every key in the database — always configure a `prefix` when the Redis database is shared.
 
 ## How Data is Stored
 
@@ -162,6 +165,8 @@ await cache.set("dates", {
   updatedAt: date.toISOString(),
 });
 ```
+
+`get()` and `mget()` treat an unparseable (corrupt or legacy) cached payload as a miss and delete the offending key, so a single bad entry can't fail a read or a whole batch.
 
 ## Production Tips
 

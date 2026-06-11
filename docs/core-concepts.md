@@ -49,6 +49,8 @@ const userCache = new CacheManager({
 
 Different CacheManagers with different namespaces sharing the same adapters won't collide — `users:42` and `products:42` are distinct keys.
 
+Namespaces are joined with `:` and not escaped: namespace `"a"` + key `"b:c"` produces the same stored key as namespace `"a:b"` + key `"c"`. Avoid `:` in namespace values if your keys may contain it.
+
 ## Backfill
 
 When a value is found in a lower layer (e.g., L2), the CacheManager automatically **backfills** all higher layers (e.g., L1) so subsequent reads are served from the fastest layer.

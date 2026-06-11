@@ -92,7 +92,7 @@ import Redis from "ioredis";
 const cache = new CacheManager({
   namespace: "products",
   layers: [
-    new MemoryAdapter({ defaultTtlMs: 30_000 }), // L1: 30s TTL
+    new MemoryAdapter({ maxTtlMs: 30_000 }), // L1: capped at 30s
     new RedisAdapter({ client: new Redis(), defaultTtlMs: 600_000 }), // L2: 10min TTL
   ],
 });

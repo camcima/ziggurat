@@ -68,6 +68,13 @@ describe("MemcacheAdapter", () => {
       const result = await adapter.get<{ foo: string }>("key1");
       expect(result!.value).toEqual({ foo: "bar" });
     });
+
+    it("returns null and deletes the key on corrupt JSON", async () => {
+      await mockClient.set("bad", "{not json");
+      const result = await adapter.get("bad");
+      expect(result).toBeNull();
+      expect(mockClient.delete).toHaveBeenCalledWith("bad");
+    });
   });
 
   describe("set", () => {

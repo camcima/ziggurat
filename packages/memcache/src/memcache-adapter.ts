@@ -30,7 +30,15 @@ export class MemcacheAdapter extends BaseCacheAdapter {
     const result = await this.client.get(this.prefixedKey(key));
     if (result.value === null) return null;
 
-    const entry = JSON.parse(result.value.toString()) as CacheEntry<T>;
+    let entry: CacheEntry<T>;
+    try {
+      entry = JSON.parse(result.value.toString()) as CacheEntry<T>;
+    } catch {
+      // Corrupt/legacy payload — delete and treat as a miss
+      await this.client.delete(this.prefixedKey(key));
+      return null;
+    }
+
     if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
       await this.client.delete(this.prefixedKey(key));
       return null;

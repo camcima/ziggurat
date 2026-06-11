@@ -21,13 +21,15 @@ export class CacheManager {
   private readonly events: TypedEventEmitter<CacheEventMap>;
 
   constructor(options: CacheManagerOptions) {
-    this.layers = options.layers;
+    if (options.layers.length === 0) {
+      throw new Error("CacheManager requires at least one layer");
+    }
+    this.layers = [...options.layers];
     this.namespace = options.namespace;
     this.syncBackfill = options.syncBackfill ?? false;
     this.strictWrites = options.strictWrites ?? false;
     this.stampedeConfig = {
-      coalesce: true,
-      ...options.stampede,
+      coalesce: options.stampede?.coalesce ?? true,
     };
     this.events = options.events ?? new TypedEventEmitter<CacheEventMap>();
   }

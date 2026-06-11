@@ -887,3 +887,35 @@ describe("strictWrites", () => {
     expect(errors).toContain("set");
   });
 });
+
+describe("constructor validation", () => {
+  it("throws when layers is empty", () => {
+    expect(() => new CacheManager({ layers: [] })).toThrow(
+      "CacheManager requires at least one layer",
+    );
+  });
+
+  it("copies the layers array (later mutation of the input has no effect)", async () => {
+    const adapter = new MemoryAdapter();
+    const layers = [adapter];
+    const cache = new CacheManager({ layers });
+    layers.pop();
+    await cache.set("k", "v");
+    expect((await cache.get("k"))?.value).toBe("v");
+  });
+
+  it("treats stampede: { coalesce: undefined } as coalesce enabled", async () => {
+    const cache = new CacheManager({
+      layers: [new MemoryAdapter()],
+      stampede: { coalesce: undefined },
+    });
+    let calls = 0;
+    const factory = async () => {
+      calls++;
+      await new Promise((r) => setTimeout(r, 10));
+      return "v";
+    };
+    await Promise.all([cache.wrap("k", factory), cache.wrap("k", factory)]);
+    expect(calls).toBe(1);
+  });
+});

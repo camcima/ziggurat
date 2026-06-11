@@ -3,6 +3,7 @@ import { CacheManager } from "../../src/cache-manager.js";
 import { MemoryAdapter } from "../../src/memory-adapter.js";
 import { BaseCacheAdapter } from "../../src/base-cache-adapter.js";
 import type {
+  CacheAdapter,
   CacheEntry,
   CacheHitEvent,
   CacheMissEvent,
@@ -248,7 +249,7 @@ describe("CacheManager (single-layer)", () => {
       const a2 = new MemoryAdapter();
       const mgr = new CacheManager({ layers: [a1, a2] });
       const first = mgr.getLayers();
-      first.push(new MemoryAdapter());
+      (first as CacheAdapter[]).push(new MemoryAdapter());
       const second = mgr.getLayers();
       expect(second).toHaveLength(2);
       expect(first).not.toBe(second);

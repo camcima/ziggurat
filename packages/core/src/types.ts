@@ -165,6 +165,18 @@ export interface CacheManagerOptions {
   syncBackfill?: boolean;
   stampede?: StampedeConfig;
   events?: TypedEventEmitter<CacheEventMap>;
+  /**
+   * When true, set/mset/delete/mdel throw an AggregateError if EVERY
+   * layer fails the write. Default false (writes never throw; failures
+   * are observable only via "error" events).
+   *
+   * In a single-layer configuration, any write failure will throw because
+   * "every layer" is the one layer.
+   *
+   * `wrap()` is unaffected by this option — it always returns the computed
+   * factory value and surfaces cache-write failures only via "error" events.
+   */
+  strictWrites?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type

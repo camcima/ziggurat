@@ -793,3 +793,97 @@ describe("CacheManager events", () => {
     });
   });
 });
+
+describe("strictWrites", () => {
+  function failingAdapter(): MemoryAdapter {
+    const a = new MemoryAdapter();
+    vi.spyOn(a, "set").mockRejectedValue(new Error("down"));
+    vi.spyOn(a, "mset").mockRejectedValue(new Error("down"));
+    vi.spyOn(a, "delete").mockRejectedValue(new Error("down"));
+    vi.spyOn(a, "mdel").mockRejectedValue(new Error("down"));
+    return a;
+  }
+
+  it("throws AggregateError when ALL layers fail a set", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter(), failingAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.set("k", "v")).rejects.toBeInstanceOf(AggregateError);
+  });
+
+  it("does not throw when at least one layer succeeds", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter(), new MemoryAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.set("k", "v")).resolves.toBeUndefined();
+  });
+
+  it("defaults to non-strict (never throws)", async () => {
+    const cache = new CacheManager({ layers: [failingAdapter()] });
+    await expect(cache.set("k", "v")).resolves.toBeUndefined();
+  });
+
+  it("applies to delete", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.delete("k")).rejects.toBeInstanceOf(AggregateError);
+  });
+
+  it("applies to mset", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.mset([{ key: "k", value: "v" }])).rejects.toBeInstanceOf(
+      AggregateError,
+    );
+  });
+
+  it("applies to mdel", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.mdel(["k"])).rejects.toBeInstanceOf(AggregateError);
+  });
+
+  it("includes all layer failures and a descriptive message in the AggregateError", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter(), failingAdapter()],
+      strictWrites: true,
+    });
+    const err = await cache.set("k", "v").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AggregateError);
+    const ae = err as AggregateError;
+    expect(ae.errors).toHaveLength(2);
+    expect(ae.message).toMatch(/All 2 cache layer/);
+  });
+
+  it("emits per-layer error events before throwing", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter(), failingAdapter()],
+      strictWrites: true,
+    });
+    const fired: string[] = [];
+    cache.on("error", (e) => fired.push(e.layerName));
+    await expect(cache.set("k", "v")).rejects.toBeInstanceOf(AggregateError);
+    expect(fired).toHaveLength(2);
+  });
+
+  it("wrap returns the computed value even when caching it fails under strictWrites", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter()],
+      strictWrites: true,
+    });
+    const errors: string[] = [];
+    cache.on("error", (e) => errors.push(e.operation));
+    const value = await cache.wrap("k", async () => "computed");
+    expect(value).toBe("computed");
+    // the failed cache write surfaced as an error event, not a throw
+    expect(errors).toContain("set");
+  });
+});

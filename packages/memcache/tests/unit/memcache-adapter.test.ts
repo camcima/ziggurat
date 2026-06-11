@@ -75,6 +75,17 @@ describe("MemcacheAdapter", () => {
       expect(result).toBeNull();
       expect(mockClient.delete).toHaveBeenCalledWith("bad");
     });
+
+    it("deletes the prefixed key on corrupt JSON when a prefix is set", async () => {
+      const prefixed = new MemcacheAdapter({
+        client: mockClient,
+        prefix: "app:",
+      });
+      await mockClient.set("app:bad", "{not json");
+      const result = await prefixed.get("bad");
+      expect(result).toBeNull();
+      expect(mockClient.delete).toHaveBeenCalledWith("app:bad");
+    });
   });
 
   describe("set", () => {
@@ -177,6 +188,20 @@ describe("MemcacheAdapter", () => {
         const expectedAbsolute = Math.ceil((Date.now() + sixtyDaysMs) / 1000);
         expect(mockClient.set).toHaveBeenCalledWith("k", expect.any(String), {
           expires: expectedAbsolute,
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("sends exactly 30 days as a relative TTL (not absolute)", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-06-11T00:00:00Z"));
+      try {
+        const thirtyDaysMs = 60 * 60 * 24 * 30 * 1000;
+        await adapter.set("k", "v", thirtyDaysMs);
+        expect(mockClient.set).toHaveBeenCalledWith("k", expect.any(String), {
+          expires: 2592000,
         });
       } finally {
         vi.useRealTimers();

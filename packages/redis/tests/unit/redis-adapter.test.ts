@@ -354,9 +354,16 @@ describe("RedisAdapter", () => {
   });
 
   describe("flushAll", () => {
-    it("should call FLUSHDB on the redis client", async () => {
-      await adapter.flushAll();
-      expect(mockRedis.flushdb).toHaveBeenCalled();
+    it("should delete only keys under the adapter prefix, never call flushdb", async () => {
+      const prefixed = new RedisAdapter({ client: mockRedis, prefix: "app:" });
+      await prefixed.set("k1", "v1");
+      await mockRedis.set("other:k", "untouched");
+
+      await prefixed.flushAll();
+
+      expect(mockRedis.flushdb).not.toHaveBeenCalled();
+      expect(await prefixed.get("k1")).toBeNull();
+      expect(await mockRedis.get("other:k")).toBe("untouched");
     });
   });
 

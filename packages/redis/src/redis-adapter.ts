@@ -169,8 +169,4 @@ export class RedisAdapter extends BaseCacheAdapter {
     const prefixedKeys = keys.map((k) => this.prefixedKey(k));
     await this.client.del(...prefixedKeys);
   }
-
-  async flushAll(): Promise<void> {
-    await this.client.flushdb();
-  }
 }

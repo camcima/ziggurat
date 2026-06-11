@@ -173,13 +173,27 @@ describe("MemcacheAdapter", () => {
       });
     });
 
-    it("should use defaultTtlMs over caller-provided ttlMs", async () => {
+    it("should use caller-provided ttlMs over defaultTtlMs", async () => {
       const a = new MemcacheAdapter({
         client: mockClient,
         defaultTtlMs: 5000,
       });
 
       await a.set("key1", "value1", 60000);
+      // explicit 60000ms wins over defaultTtlMs 5000ms → 60 seconds
+      expect(mockClient.set).toHaveBeenCalledWith("key1", expect.any(String), {
+        expires: 60,
+      });
+    });
+
+    it("should cap ttlMs at maxTtlMs", async () => {
+      const a = new MemcacheAdapter({
+        client: mockClient,
+        maxTtlMs: 5000,
+      });
+
+      await a.set("key1", "value1", 60000);
+      // maxTtlMs 5000ms caps the 60000ms → 5 seconds
       expect(mockClient.set).toHaveBeenCalledWith("key1", expect.any(String), {
         expires: 5,
       });

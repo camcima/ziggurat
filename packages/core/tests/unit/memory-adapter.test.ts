@@ -147,13 +147,25 @@ describe("MemoryAdapter", () => {
       expect(result!.expiresAt!).toBeGreaterThanOrEqual(before + 5000);
     });
 
-    it("should use defaultTtlMs over caller-provided ttlMs", async () => {
+    it("should use caller-provided ttlMs over defaultTtlMs", async () => {
       const a = new MemoryAdapter({ defaultTtlMs: 5000 });
-      const before = Date.now();
-      await a.set("k", "v", 60000);
-      const result = await a.get<string>("k");
-      // Should use adapter's 5000ms, not caller's 60000ms
-      expect(result!.expiresAt!).toBeLessThan(before + 10000);
+      await a.set("k", "v", 60_000);
+      const ttl = await a.getTtl("k");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        expect(ttl.ttlMs).toBeGreaterThan(5000);
+        expect(ttl.ttlMs).toBeLessThanOrEqual(60_000);
+      }
+    });
+
+    it("should cap ttlMs at maxTtlMs", async () => {
+      const a = new MemoryAdapter({ maxTtlMs: 5000 });
+      await a.set("k", "v", 60_000);
+      const ttl = await a.getTtl("k");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        expect(ttl.ttlMs).toBeLessThanOrEqual(5000);
+      }
     });
 
     it("should expire entries based on defaultTtlMs", async () => {

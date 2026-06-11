@@ -3,6 +3,7 @@ export type {
   CacheSetEntry,
   CacheAdapter,
   TtlResult,
+  AdapterTtlOptions,
   StampedeConfig,
   CacheManagerOptions,
   MemoryAdapterOptions,

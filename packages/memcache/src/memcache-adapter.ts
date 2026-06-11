@@ -1,24 +1,21 @@
-import type { CacheEntry } from "@ziggurat-cache/core";
+import type { AdapterTtlOptions, CacheEntry } from "@ziggurat-cache/core";
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type { Client } from "memjs";
 
-export interface MemcacheAdapterOptions {
+export interface MemcacheAdapterOptions extends AdapterTtlOptions {
   client: Client;
   prefix?: string;
-  defaultTtlMs?: number;
 }
 
 export class MemcacheAdapter extends BaseCacheAdapter {
   readonly name = "memcache";
   private readonly client: Client;
   private readonly prefix: string;
-  private readonly defaultTtlMs?: number;
 
   constructor(options: MemcacheAdapterOptions) {
-    super();
+    super(options);
     this.client = options.client;
     this.prefix = options.prefix ?? "";
-    this.defaultTtlMs = options.defaultTtlMs;
   }
 
   private prefixedKey(key: string): string {
@@ -40,7 +37,7 @@ export class MemcacheAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    const effectiveTtl = this.defaultTtlMs ?? ttlMs;
+    const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
     const expiresAt =

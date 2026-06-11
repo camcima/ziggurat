@@ -143,6 +143,81 @@ describe("BaseCacheAdapter default implementations", () => {
   });
 });
 
+describe("TTL resolution (defaultTtlMs / maxTtlMs)", () => {
+  class TtlProbeAdapter extends BaseCacheAdapter {
+    readonly name = "ttl-probe";
+    lastTtl: number | undefined = -999;
+    async get<T>(): Promise<CacheEntry<T> | null> {
+      return null;
+    }
+    async set<T>(_key: string, _value: T, ttlMs?: number): Promise<void> {
+      this.lastTtl = this.resolveTtl(ttlMs);
+    }
+    async delete(): Promise<void> {}
+    async clear(): Promise<void> {}
+  }
+
+  it("uses explicit ttlMs when both ttlMs and defaultTtlMs are set", async () => {
+    const a = new TtlProbeAdapter({ defaultTtlMs: 60_000 });
+    await a.set("k", "v", 5_000);
+    expect(a.lastTtl).toBe(5_000);
+  });
+  it("falls back to defaultTtlMs when ttlMs is omitted", async () => {
+    const a = new TtlProbeAdapter({ defaultTtlMs: 60_000 });
+    await a.set("k", "v");
+    expect(a.lastTtl).toBe(60_000);
+  });
+  it("returns undefined (permanent) when neither is set", async () => {
+    const a = new TtlProbeAdapter();
+    await a.set("k", "v");
+    expect(a.lastTtl).toBeUndefined();
+  });
+  it("caps explicit ttlMs at maxTtlMs", async () => {
+    const a = new TtlProbeAdapter({ maxTtlMs: 30_000 });
+    await a.set("k", "v", 600_000);
+    expect(a.lastTtl).toBe(30_000);
+  });
+  it("does not raise short ttlMs to maxTtlMs", async () => {
+    const a = new TtlProbeAdapter({ maxTtlMs: 30_000 });
+    await a.set("k", "v", 1_000);
+    expect(a.lastTtl).toBe(1_000);
+  });
+  it("bounds permanent entries at maxTtlMs", async () => {
+    const a = new TtlProbeAdapter({ maxTtlMs: 30_000 });
+    await a.set("k", "v");
+    expect(a.lastTtl).toBe(30_000);
+  });
+  it("caps defaultTtlMs at maxTtlMs", async () => {
+    const a = new TtlProbeAdapter({ defaultTtlMs: 60_000, maxTtlMs: 30_000 });
+    await a.set("k", "v");
+    expect(a.lastTtl).toBe(30_000);
+  });
+
+  describe("constructor validation", () => {
+    it("throws when maxTtlMs is NaN", () => {
+      expect(() => new TtlProbeAdapter({ maxTtlMs: NaN })).toThrow(
+        "maxTtlMs must be a finite, non-negative number of milliseconds",
+      );
+    });
+
+    it("throws when maxTtlMs is Infinity", () => {
+      expect(() => new TtlProbeAdapter({ maxTtlMs: Infinity })).toThrow(
+        "maxTtlMs must be a finite, non-negative number of milliseconds",
+      );
+    });
+
+    it("throws when defaultTtlMs is negative", () => {
+      expect(() => new TtlProbeAdapter({ defaultTtlMs: -1 })).toThrow(
+        "defaultTtlMs must be a finite, non-negative number of milliseconds",
+      );
+    });
+
+    it("does not throw when maxTtlMs is 0", () => {
+      expect(() => new TtlProbeAdapter({ maxTtlMs: 0 })).not.toThrow();
+    });
+  });
+});
+
 describe("BaseCacheAdapter batch error propagation", () => {
   const adapter = new FailingAdapter();
 

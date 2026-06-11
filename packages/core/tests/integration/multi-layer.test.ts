@@ -137,28 +137,17 @@ describe("Multi-Layer Cache", () => {
   });
 
   describe("backfill with adapter-level TTL", () => {
-    it("should use adapter defaultTtlMs for backfill instead of source TTL", async () => {
-      const l1WithTtl = new MemoryAdapter({ defaultTtlMs: 1000 });
-      const l2NoTtl = new MemoryAdapter();
-      const syncManager = new CacheManager({
-        layers: [l1WithTtl, l2NoTtl],
-        syncBackfill: true,
-      });
-
-      // Set in L2 with a long TTL
-      await l2NoTtl.set("key1", "value1", 60000);
-
-      // Get via manager — should backfill L1
-      await syncManager.get<string>("key1");
-
-      // L1 should have the value with its OWN defaultTtlMs, not L2's TTL
-      const l1Entry = await l1WithTtl.get<string>("key1");
-      expect(l1Entry).not.toBeNull();
-      expect(l1Entry!.expiresAt).toBeTypeOf("number");
-      // L1 TTL should be ~1000ms, not ~60000ms
-      const remainingTtl = l1Entry!.expiresAt! - Date.now();
-      expect(remainingTtl).toBeLessThan(2000);
-      expect(remainingTtl).toBeGreaterThan(0);
+    it("should cap backfill TTL at adapter maxTtlMs", async () => {
+      const l1 = new MemoryAdapter({ maxTtlMs: 1000 });
+      const l2 = new MemoryAdapter();
+      await l2.set("k", "v", 600_000);
+      const cache = new CacheManager({ layers: [l1, l2], syncBackfill: true });
+      await cache.get("k");
+      const l1Ttl = await l1.getTtl("k");
+      expect(l1Ttl.kind).toBe("expiring");
+      if (l1Ttl.kind === "expiring") {
+        expect(l1Ttl.ttlMs).toBeLessThanOrEqual(1000);
+      }
     });
 
     it("should fall back to remaining TTL when adapter has no defaultTtlMs", async () => {

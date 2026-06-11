@@ -277,6 +277,16 @@ describe("SQLiteAdapter", () => {
       expect(a!.expiresAt).toBeTypeOf("number");
       expect(b!.expiresAt).toBeNull();
     });
+
+    it("should cap ttlMs at maxTtlMs in mset", async () => {
+      const cappedAdapter = new SQLiteAdapter({ db, maxTtlMs: 5000 });
+      await cappedAdapter.mset([{ key: "k", value: "v", ttlMs: 60_000 }]);
+      const ttl = await cappedAdapter.getTtl("k");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        expect(ttl.ttlMs).toBeLessThanOrEqual(5000);
+      }
+    });
   });
 
   describe("mdel", () => {
@@ -311,13 +321,26 @@ describe("SQLiteAdapter", () => {
       expect(result!.expiresAt).toBeTypeOf("number");
     });
 
-    it("should use defaultTtlMs over caller-provided ttlMs", async () => {
+    it("should use caller-provided ttlMs over defaultTtlMs", async () => {
       const a = new SQLiteAdapter({ db, defaultTtlMs: 5000 });
       await a.set("key1", "value1", 60000);
-      const result = await a.get<string>("key1");
-      // Should use adapter's 5000ms, not caller's 60000ms
-      const remaining = result!.expiresAt! - Date.now();
-      expect(remaining).toBeLessThan(6000);
+      const ttl = await a.getTtl("key1");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        // explicit 60000ms wins over defaultTtlMs 5000ms
+        expect(ttl.ttlMs).toBeGreaterThan(5000);
+        expect(ttl.ttlMs).toBeLessThanOrEqual(60000);
+      }
+    });
+
+    it("should cap ttlMs at maxTtlMs", async () => {
+      const a = new SQLiteAdapter({ db, maxTtlMs: 5000 });
+      await a.set("key1", "value1", 60000);
+      const ttl = await a.getTtl("key1");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        expect(ttl.ttlMs).toBeLessThanOrEqual(5000);
+      }
     });
   });
 });

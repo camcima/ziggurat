@@ -1,4 +1,5 @@
 import type {
+  AdapterTtlOptions,
   CacheEntry,
   CacheSetEntry,
   TtlResult,
@@ -6,11 +7,10 @@ import type {
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type Database from "better-sqlite3";
 
-export interface SQLiteAdapterOptions {
+export interface SQLiteAdapterOptions extends AdapterTtlOptions {
   db: Database.Database;
   tableName?: string;
   namespace?: string;
-  defaultTtlMs?: number;
 }
 
 export class SQLiteAdapter extends BaseCacheAdapter {
@@ -18,7 +18,6 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   private readonly db: Database.Database;
   private readonly tableName: string;
   private readonly namespace: string;
-  private readonly defaultTtlMs?: number;
 
   private readonly stmtGet: Database.Statement;
   private readonly stmtSet: Database.Statement;
@@ -38,12 +37,11 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   }
 
   constructor(options: SQLiteAdapterOptions) {
-    super();
+    super(options);
     this.db = options.db;
     this.tableName = options.tableName ?? "ziggurat_cache";
     SQLiteAdapter.validateTableName(this.tableName);
     this.namespace = options.namespace ?? "";
-    this.defaultTtlMs = options.defaultTtlMs;
 
     // Enable WAL mode for better concurrent read performance
     this.db.pragma("journal_mode = WAL");
@@ -108,7 +106,7 @@ export class SQLiteAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/require-await
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    const effectiveTtl = this.defaultTtlMs ?? ttlMs;
+    const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
     const expiresAt =
@@ -193,7 +191,7 @@ export class SQLiteAdapter extends BaseCacheAdapter {
     const insertMany = this.db.transaction(
       (items: readonly CacheSetEntry<T>[]) => {
         for (const entry of items) {
-          const effectiveTtl = this.defaultTtlMs ?? entry.ttlMs;
+          const effectiveTtl = this.resolveTtl(entry.ttlMs);
           // ttlMs <= 0 means already expired — don't store
           if (effectiveTtl !== undefined && effectiveTtl <= 0) continue;
           const expiresAt =

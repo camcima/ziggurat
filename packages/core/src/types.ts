@@ -14,6 +14,19 @@ export type TtlResult =
   | { kind: "permanent" }
   | { kind: "expiring"; ttlMs: number };
 
+export interface AdapterTtlOptions {
+  /**
+   * Fallback TTL in milliseconds, applied when set()/mset() is called
+   * without an explicit ttlMs. An explicit ttlMs always wins.
+   */
+  defaultTtlMs?: number;
+  /**
+   * Upper bound in milliseconds applied to every entry — explicit TTLs,
+   * defaultTtlMs, and otherwise-permanent entries are all capped to this.
+   */
+  maxTtlMs?: number;
+}
+
 export interface CacheAdapter {
   readonly name: string;
   get<T>(key: string): Promise<CacheEntry<T> | null>;
@@ -153,6 +166,5 @@ export interface CacheManagerOptions {
   events?: TypedEventEmitter<CacheEventMap>;
 }
 
-export interface MemoryAdapterOptions {
-  defaultTtlMs?: number;
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface MemoryAdapterOptions extends AdapterTtlOptions {}

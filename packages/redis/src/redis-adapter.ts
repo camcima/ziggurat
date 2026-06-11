@@ -1,24 +1,25 @@
-import type { CacheEntry, CacheSetEntry } from "@ziggurat-cache/core";
+import type {
+  AdapterTtlOptions,
+  CacheEntry,
+  CacheSetEntry,
+} from "@ziggurat-cache/core";
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type { Redis } from "ioredis";
 
-export interface RedisAdapterOptions {
+export interface RedisAdapterOptions extends AdapterTtlOptions {
   client: Redis;
   prefix?: string;
-  defaultTtlMs?: number;
 }
 
 export class RedisAdapter extends BaseCacheAdapter {
   readonly name = "redis";
   private readonly client: Redis;
   private readonly prefix: string;
-  private readonly defaultTtlMs?: number;
 
   constructor(options: RedisAdapterOptions) {
-    super();
+    super(options);
     this.client = options.client;
     this.prefix = options.prefix ?? "";
-    this.defaultTtlMs = options.defaultTtlMs;
   }
 
   private prefixedKey(key: string): string {
@@ -40,7 +41,7 @@ export class RedisAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    const effectiveTtl = this.defaultTtlMs ?? ttlMs;
+    const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
     const expiresAt =
@@ -143,7 +144,7 @@ export class RedisAdapter extends BaseCacheAdapter {
     const pipeline = this.client.pipeline();
     let queued = 0;
     for (const entry of entries) {
-      const effectiveTtl = this.defaultTtlMs ?? entry.ttlMs;
+      const effectiveTtl = this.resolveTtl(entry.ttlMs);
       // ttlMs <= 0 means already expired — don't store
       if (effectiveTtl !== undefined && effectiveTtl <= 0) continue;
       const expiresAt =

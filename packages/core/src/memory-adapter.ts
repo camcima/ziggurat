@@ -5,11 +5,9 @@ import { BaseCacheAdapter } from "./base-cache-adapter.js";
 export class MemoryAdapter extends BaseCacheAdapter {
   readonly name = "memory";
   private readonly cache: NodeCache;
-  private readonly defaultTtlMs?: number;
 
   constructor(options: MemoryAdapterOptions = {}) {
-    super();
-    this.defaultTtlMs = options.defaultTtlMs;
+    super(options);
     this.cache = new NodeCache({
       stdTTL: 0,
       checkperiod: 0,
@@ -31,7 +29,7 @@ export class MemoryAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/require-await
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    const effectiveTtl = this.defaultTtlMs ?? ttlMs;
+    const effectiveTtl = this.resolveTtl(ttlMs);
     if (effectiveTtl !== undefined) {
       // ttlMs <= 0 means already expired — don't store
       if (effectiveTtl <= 0) return;

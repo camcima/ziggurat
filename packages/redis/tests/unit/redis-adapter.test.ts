@@ -176,14 +176,28 @@ describe("RedisAdapter", () => {
       expect(mockRedis.set).not.toHaveBeenCalled();
     });
 
-    it("should use defaultTtlMs over caller-provided ttlMs", async () => {
+    it("should use caller-provided ttlMs over defaultTtlMs", async () => {
       const a = new RedisAdapter({
         client: mockRedis,
         defaultTtlMs: 5000,
       });
 
       await a.set("key1", "value1", 60000);
-      // Should use adapter's 5000ms, not caller's 60000ms
+      // explicit 60000ms wins over defaultTtlMs 5000ms
+      expect(mockRedis.psetex).toHaveBeenCalledWith(
+        "key1",
+        60000,
+        expect.any(String),
+      );
+    });
+
+    it("should cap ttlMs at maxTtlMs", async () => {
+      const a = new RedisAdapter({
+        client: mockRedis,
+        maxTtlMs: 5000,
+      });
+
+      await a.set("key1", "value1", 60000);
       expect(mockRedis.psetex).toHaveBeenCalledWith(
         "key1",
         5000,
@@ -308,6 +322,19 @@ describe("RedisAdapter", () => {
     it("should be a no-op for empty entries", async () => {
       await adapter.mset([]);
       // pipeline should not be called for empty entries
+    });
+
+    it("should cap ttlMs at maxTtlMs in mset pipeline", async () => {
+      const cappedAdapter = new RedisAdapter({
+        client: mockRedis,
+        maxTtlMs: 5000,
+      });
+      const pipe = mockRedis.pipeline();
+      (mockRedis.pipeline as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        pipe,
+      );
+      await cappedAdapter.mset([{ key: "k", value: "v", ttlMs: 60_000 }]);
+      expect(pipe.psetex).toHaveBeenCalledWith("k", 5000, expect.any(String));
     });
   });
 

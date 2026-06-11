@@ -30,7 +30,15 @@ export class RedisAdapter extends BaseCacheAdapter {
     const raw = await this.client.get(this.prefixedKey(key));
     if (raw === null) return null;
 
-    const entry = JSON.parse(raw) as CacheEntry<T>;
+    let entry: CacheEntry<T>;
+    try {
+      entry = JSON.parse(raw) as CacheEntry<T>;
+    } catch {
+      // Corrupt/legacy payload — delete and treat as a miss
+      await this.client.del(this.prefixedKey(key));
+      return null;
+    }
+
     if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
       await this.client.del(this.prefixedKey(key));
       return null;
@@ -129,15 +137,28 @@ export class RedisAdapter extends BaseCacheAdapter {
 
     if (!results) return map;
 
+    const corruptKeys: string[] = [];
+
     for (let i = 0; i < keys.length; i++) {
       const [err, raw] = results[i] as [Error | null, string | null];
       if (err || raw === null) continue;
 
-      const entry = JSON.parse(raw) as CacheEntry<T>;
+      let entry: CacheEntry<T>;
+      try {
+        entry = JSON.parse(raw) as CacheEntry<T>;
+      } catch {
+        // Corrupt/legacy payload — treat as a miss and schedule cleanup
+        corruptKeys.push(prefixedKeys[i]);
+        continue;
+      }
       if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
         continue;
       }
       map.set(keys[i], entry);
+    }
+
+    if (corruptKeys.length > 0) {
+      await this.client.del(...corruptKeys);
     }
 
     return map;

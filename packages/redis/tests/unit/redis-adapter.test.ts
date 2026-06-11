@@ -118,6 +118,13 @@ describe("RedisAdapter", () => {
       expect(result!.value).toEqual({ foo: "bar" });
       expect(result!.expiresAt).toBe(expiresAt);
     });
+
+    it("returns null and deletes the key on corrupt JSON", async () => {
+      await mockRedis.set("bad", "{not json");
+      const result = await adapter.get("bad");
+      expect(result).toBeNull();
+      expect(mockRedis.del).toHaveBeenCalledWith("bad");
+    });
   });
 
   describe("set", () => {
@@ -272,6 +279,25 @@ describe("RedisAdapter", () => {
     it("should return empty Map for empty keys", async () => {
       const result = await adapter.mget([]);
       expect(result.size).toBe(0);
+    });
+
+    it("skips corrupt JSON entries in mget instead of throwing", async () => {
+      await adapter.set("good", "v1");
+      await mockRedis.set("bad", "{not json");
+      const result = await adapter.mget(["good", "bad"]);
+      expect(result.get("good")?.value).toBe("v1");
+      expect(result.has("bad")).toBe(false);
+    });
+
+    it("skips and cleans up a corrupt entry in the middle of a batch", async () => {
+      await adapter.set("a", "v1");
+      await mockRedis.set("b", "{not json");
+      await adapter.set("c", "v3");
+      const result = await adapter.mget(["a", "b", "c"]);
+      expect(result.get("a")?.value).toBe("v1");
+      expect(result.has("b")).toBe(false);
+      expect(result.get("c")?.value).toBe("v3");
+      expect(mockRedis.del).toHaveBeenCalledWith("b");
     });
 
     it("should return successful entries and skip errored pipeline slots", async () => {

@@ -211,4 +211,47 @@ describe("MemoryAdapter", () => {
       expect(() => a.close()).not.toThrow();
     });
   });
+
+  describe("serialization mode", () => {
+    it("json mode returns JSON-round-tripped values (matches Redis/SQLite fidelity)", async () => {
+      const a = new MemoryAdapter({ serialization: "json" });
+      const date = new Date("2026-01-01T00:00:00Z");
+      await a.set("k", { when: date });
+      const entry = await a.get<{ when: unknown }>("k");
+      expect(entry?.value.when).toBe("2026-01-01T00:00:00.000Z");
+    });
+
+    it("json mode prevents cache poisoning via mutation of returned objects", async () => {
+      const a = new MemoryAdapter({ serialization: "json" });
+      await a.set("k", { n: 1 });
+      const first = await a.get<{ n: number }>("k");
+      first!.value.n = 999;
+      const second = await a.get<{ n: number }>("k");
+      expect(second?.value.n).toBe(1);
+    });
+
+    it("json mode round-trips through mset/mget batch operations", async () => {
+      const a = new MemoryAdapter({ serialization: "json" });
+      await a.mset([
+        { key: "k1", value: { n: 1 } },
+        { key: "k2", value: { n: 2 } },
+      ]);
+      const result = await a.mget<{ n: number }>(["k1", "k2"]);
+      expect(result.get("k1")?.value).toEqual({ n: 1 });
+      expect(result.get("k2")?.value).toEqual({ n: 2 });
+      // returned objects are fresh copies (mutation isolation), proving round-trip
+      const k1 = result.get("k1")!;
+      k1.value.n = 999;
+      const again = await a.get<{ n: number }>("k1");
+      expect(again?.value.n).toBe(1);
+    });
+
+    it("reference mode (default) preserves object identity", async () => {
+      const a = new MemoryAdapter();
+      const obj = { n: 1 };
+      await a.set("k", obj);
+      const entry = await a.get<{ n: number }>("k");
+      expect(entry?.value).toBe(obj);
+    });
+  });
 });

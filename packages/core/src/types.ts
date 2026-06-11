@@ -193,4 +193,16 @@ export interface MemoryAdapterOptions extends AdapterTtlOptions {
    * keys beyond the cap cause set() to throw.
    */
   maxKeys?: number;
+  /**
+   * "reference" (default): store live references — fastest, but returned
+   * objects can be mutated by callers (poisoning the cache) and rich types
+   * (Date, Map) survive here while JSON-based layers flatten them, so
+   * multi-layer reads can return different shapes per layer.
+   * "json": JSON round-trip on every set/get — consistent with the Redis,
+   * SQLite, and Memcache adapters and immune to caller mutation. Note the
+   * caveats: non-serializable values (functions, circular references) throw
+   * at `set()` time, and `undefined` values are silently dropped by
+   * `JSON.stringify` and treated as a cache miss on read.
+   */
+  serialization?: "reference" | "json";
 }

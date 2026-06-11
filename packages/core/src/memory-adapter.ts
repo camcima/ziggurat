@@ -5,9 +5,11 @@ import { BaseCacheAdapter } from "./base-cache-adapter.js";
 export class MemoryAdapter extends BaseCacheAdapter {
   readonly name = "memory";
   private readonly cache: NodeCache;
+  private readonly serialization: "reference" | "json";
 
   constructor(options: MemoryAdapterOptions = {}) {
     super(options);
+    this.serialization = options.serialization ?? "reference";
     this.cache = new NodeCache({
       stdTTL: 0,
       checkperiod:
@@ -24,9 +26,13 @@ export class MemoryAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async get<T>(key: string): Promise<CacheEntry<T> | null> {
-    const value = this.cache.get<T>(key);
-    if (value === undefined) return null;
+    const raw = this.cache.get<unknown>(key);
+    if (raw === undefined) return null;
 
+    const value =
+      this.serialization === "json"
+        ? (JSON.parse(raw as string) as T)
+        : (raw as T);
     const ttl = this.cache.getTtl(key);
     return {
       value,
@@ -37,12 +43,14 @@ export class MemoryAdapter extends BaseCacheAdapter {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/require-await
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
     const effectiveTtl = this.resolveTtl(ttlMs);
+    const stored =
+      this.serialization === "json" ? JSON.stringify(value) : value;
     if (effectiveTtl !== undefined) {
       // ttlMs <= 0 means already expired — don't store
       if (effectiveTtl <= 0) return;
-      this.cache.set(key, value, effectiveTtl / 1000);
+      this.cache.set(key, stored, effectiveTtl / 1000);
     } else {
-      this.cache.set(key, value, 0);
+      this.cache.set(key, stored, 0);
     }
   }
 

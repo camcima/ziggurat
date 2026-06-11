@@ -179,5 +179,18 @@ export interface CacheManagerOptions {
   strictWrites?: boolean;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface MemoryAdapterOptions extends AdapterTtlOptions {}
+export interface MemoryAdapterOptions extends AdapterTtlOptions {
+  /**
+   * Interval in ms for proactive eviction of expired entries.
+   * Default 0 (disabled): expired entries are removed only when accessed,
+   * so write-heavy/read-rarely workloads can grow unboundedly.
+   * Very small values create a tight eviction loop; prefer >= 1000 (1 second).
+   */
+  checkPeriodMs?: number;
+  /**
+   * Maximum number of keys; set() throws once exceeded. Default unlimited.
+   * Overwriting an existing key always succeeds even at capacity — only NEW
+   * keys beyond the cap cause set() to throw.
+   */
+  maxKeys?: number;
+}

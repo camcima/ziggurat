@@ -10,9 +10,16 @@ export class MemoryAdapter extends BaseCacheAdapter {
     super(options);
     this.cache = new NodeCache({
       stdTTL: 0,
-      checkperiod: 0,
+      checkperiod:
+        options.checkPeriodMs !== undefined ? options.checkPeriodMs / 1000 : 0,
       useClones: false,
+      maxKeys: options.maxKeys ?? -1,
     });
+  }
+
+  /** Stop the periodic expiry-check timer (no-op when checkPeriodMs is unset). */
+  close(): void {
+    this.cache.close();
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryAdapter } from "../../src/memory-adapter.js";
 
 describe("MemoryAdapter", () => {
@@ -181,6 +181,34 @@ describe("MemoryAdapter", () => {
       await a.set("k", "v", 5000);
       const result = await a.get<string>("k");
       expect(result!.expiresAt!).toBeGreaterThanOrEqual(before + 5000);
+    });
+  });
+
+  describe("eviction controls", () => {
+    it("rejects set beyond maxKeys", async () => {
+      const a = new MemoryAdapter({ maxKeys: 2 });
+      await a.set("k1", "v1");
+      await a.set("k2", "v2");
+      await expect(a.set("k3", "v3")).rejects.toThrow();
+    });
+
+    it("evicts expired entries periodically when checkPeriodMs is set", async () => {
+      vi.useFakeTimers();
+      try {
+        const a = new MemoryAdapter({ checkPeriodMs: 1000 });
+        await a.set("k", "v", 500);
+        vi.advanceTimersByTime(2000);
+        // node-cache's internal key count drops once the periodic check runs
+        expect(await a.keys()).toHaveLength(0);
+        a.close();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("close() stops the periodic check timer", () => {
+      const a = new MemoryAdapter({ checkPeriodMs: 1000 });
+      expect(() => a.close()).not.toThrow();
     });
   });
 });

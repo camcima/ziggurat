@@ -267,4 +267,49 @@ describe("instrumentCacheManager", () => {
 
     cleanup();
   });
+
+  it("should record mget operation count and accumulate hit/miss as values", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager);
+
+    await manager.set("k1", "v1");
+    await manager.mget(["k1", "k2"]); // 1 hit, 1 miss
+
+    const collected = await collectMetrics();
+    const mgetMetric = findMetric(collected, "ziggurat.cache.mget");
+    expect(mgetMetric).toBeDefined();
+    expect(mgetMetric!.dataPoints[0].value).toBe(1);
+
+    // hit/miss recorded as measurement VALUES (not high-cardinality labels)
+    const hitMetric = findMetric(collected, "ziggurat.cache.hit");
+    const mgetHitPoint = hitMetric!.dataPoints.find(
+      (dp) => dp.attributes["cache.operation"] === "mget",
+    );
+    expect(mgetHitPoint?.value).toBe(1);
+    const missMetric = findMetric(collected, "ziggurat.cache.miss");
+    const mgetMissPoint = missMetric!.dataPoints.find(
+      (dp) => dp.attributes["cache.operation"] === "mget",
+    );
+    expect(mgetMissPoint?.value).toBe(1);
+
+    cleanup();
+  });
+
+  it("should record mset and mdel operation counts", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager);
+
+    await manager.mset([{ key: "k1", value: "v1" }]);
+    await manager.mdel(["k1"]);
+
+    const collected = await collectMetrics();
+    const msetMetric = findMetric(collected, "ziggurat.cache.mset");
+    const mdelMetric = findMetric(collected, "ziggurat.cache.mdel");
+    expect(msetMetric!.dataPoints[0].value).toBe(1);
+    expect(mdelMetric!.dataPoints[0].value).toBe(1);
+
+    cleanup();
+  });
 });

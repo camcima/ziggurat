@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Test } from "@nestjs/testing";
-import { Injectable } from "@nestjs/common";
+import { Injectable, SetMetadata } from "@nestjs/common";
 import { ZigguratModule } from "../../src/ziggurat.module.js";
 import { Cached } from "../../src/cached.decorator.js";
 import { CACHE_MANAGER } from "../../src/constants.js";
@@ -94,5 +94,23 @@ describe("@Cached() decorator", () => {
     const cachedY = await cacheManager.get<string>("test:y");
     expect(cachedX!.value).toBe("data-for-x");
     expect(cachedY!.value).toBe("data-for-y");
+  });
+
+  it("preserves Reflect metadata and method name when wrapping", () => {
+    class Service {
+      @Cached({ key: (id: string) => `k:${id}` })
+      @SetMetadata("roles", ["admin"])
+      @SetMetadata("scope", "read")
+      async find(id: string): Promise<string> {
+        return id;
+      }
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(
+      Service.prototype,
+      "find",
+    );
+    expect(Reflect.getMetadata("roles", descriptor!.value)).toEqual(["admin"]);
+    expect(Reflect.getMetadata("scope", descriptor!.value)).toBe("read");
+    expect((descriptor!.value as { name: string }).name).toBe("find");
   });
 });

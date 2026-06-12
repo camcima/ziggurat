@@ -117,7 +117,14 @@ export class SQLiteAdapter extends BaseCacheAdapter {
       return null;
     }
 
-    const parsed = JSON.parse(row.value) as T;
+    let parsed: T;
+    try {
+      parsed = JSON.parse(row.value) as T;
+    } catch {
+      // Corrupt/legacy payload — delete and treat as a miss (consistent with Redis/Memcache).
+      this.stmtDel.run(this.namespace, key);
+      return null;
+    }
     return { value: parsed, expiresAt: row.expires_at };
   }
 
@@ -181,6 +188,7 @@ export class SQLiteAdapter extends BaseCacheAdapter {
 
     const now = Date.now();
     const result = new Map<string, CacheEntry<T>>();
+    const corruptKeys: string[] = [];
     for (const batch of chunk(keys, MAX_BATCH_PARAMS)) {
       const placeholders = batch.map(() => "?").join(",");
       const stmt = this.db.prepare(
@@ -194,9 +202,27 @@ export class SQLiteAdapter extends BaseCacheAdapter {
         expires_at: number | null;
       }>;
       for (const row of rows) {
-        const parsed = JSON.parse(row.value) as T;
+        let parsed: T;
+        try {
+          parsed = JSON.parse(row.value) as T;
+        } catch {
+          corruptKeys.push(row.key);
+          continue;
+        }
         result.set(row.key, { value: parsed, expiresAt: row.expires_at });
       }
+    }
+    if (corruptKeys.length > 0) {
+      const deleteCorrupt = this.db.transaction((batches: string[][]) => {
+        for (const batch of batches) {
+          const placeholders = batch.map(() => "?").join(",");
+          const stmt = this.db.prepare(
+            `DELETE FROM ${this.tableName} WHERE namespace = ? AND key IN (${placeholders})`,
+          );
+          stmt.run(this.namespace, ...batch);
+        }
+      });
+      deleteCorrupt(chunk(corruptKeys, MAX_BATCH_PARAMS));
     }
     return result;
   }
@@ -237,6 +263,11 @@ export class SQLiteAdapter extends BaseCacheAdapter {
     deleteMany(chunk(keys, MAX_BATCH_PARAMS));
   }
 
+  /**
+   * Delete ALL rows in the cache table across EVERY namespace. Unlike
+   * clear() (which is scoped to this adapter's namespace), flushAll()
+   * wipes the whole table — use clear() for a per-namespace reset.
+   */
   // eslint-disable-next-line @typescript-eslint/require-await
   async flushAll(): Promise<void> {
     this.stmtFlushAll.run();

@@ -372,6 +372,36 @@ describe("SQLiteAdapter", () => {
     });
   });
 
+  describe("corrupt entries", () => {
+    it("get() deletes a corrupt row and returns null", async () => {
+      const a = new SQLiteAdapter({ db });
+      db.prepare(
+        "INSERT INTO ziggurat_cache (namespace, key, value, expires_at) VALUES (?, ?, ?, ?)",
+      ).run("", "bad", "{not json", null);
+      expect(await a.get("bad")).toBeNull();
+      // row was cleaned up
+      const row = db
+        .prepare("SELECT 1 FROM ziggurat_cache WHERE namespace = ? AND key = ?")
+        .get("", "bad");
+      expect(row).toBeUndefined();
+    });
+
+    it("mget() skips and deletes corrupt rows, returns the good ones", async () => {
+      const a = new SQLiteAdapter({ db });
+      await a.set("good", "v1");
+      db.prepare(
+        "INSERT INTO ziggurat_cache (namespace, key, value, expires_at) VALUES (?, ?, ?, ?)",
+      ).run("", "bad", "{not json", null);
+      const result = await a.mget(["good", "bad"]);
+      expect(result.get("good")?.value).toBe("v1");
+      expect(result.has("bad")).toBe(false);
+      const row = db
+        .prepare("SELECT 1 FROM ziggurat_cache WHERE namespace = ? AND key = ?")
+        .get("", "bad");
+      expect(row).toBeUndefined();
+    });
+  });
+
   describe("defaultTtlMs", () => {
     it("should use defaultTtlMs when no ttlMs is passed", async () => {
       const a = new SQLiteAdapter({ db, defaultTtlMs: 5000 });

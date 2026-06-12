@@ -67,7 +67,11 @@ describe("instrumentCacheManager", () => {
     const hitMetric = findMetric(collected, "ziggurat.cache.hit");
     expect(hitMetric).toBeDefined();
     expect(hitMetric!.dataPoints.length).toBeGreaterThan(0);
-    expect(hitMetric!.dataPoints[0].value).toBe(1);
+    const getHitPoint = hitMetric!.dataPoints.find(
+      (dp) => dp.attributes["cache.operation"] === "get",
+    );
+    expect(getHitPoint).toBeDefined();
+    expect(getHitPoint!.value).toBe(1);
 
     cleanup();
   });

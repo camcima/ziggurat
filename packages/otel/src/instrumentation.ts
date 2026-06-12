@@ -66,7 +66,10 @@ export function instrumentCacheManager(
 
   unsubscribers.push(
     cacheManager.on("hit", (e) => {
-      hitCounter.add(1, { "cache.layer": e.layerName });
+      hitCounter.add(1, {
+        "cache.layer": e.layerName,
+        "cache.operation": "get",
+      });
       durationHistogram.record(e.durationMs, {
         "cache.operation": "get",
         "cache.layer": e.layerName,
@@ -76,7 +79,7 @@ export function instrumentCacheManager(
 
   unsubscribers.push(
     cacheManager.on("miss", (e) => {
-      missCounter.add(1);
+      missCounter.add(1, { "cache.operation": "get" });
       durationHistogram.record(e.durationMs, { "cache.operation": "get" });
     }),
   );

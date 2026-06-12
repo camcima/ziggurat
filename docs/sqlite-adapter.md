@@ -78,9 +78,9 @@ await productCache.set("42", "Widget");
 
 All batch operations use efficient SQL:
 
-- **`mget`**: Single `SELECT ... WHERE key IN (...)` query
+- **`mget`**: Chunked `SELECT ... WHERE key IN (...)` queries (900 keys per chunk, merged into one result) to stay under SQLite's bind-variable limit
 - **`mset`**: Wrapped in a SQLite transaction for atomicity and performance
-- **`mdel`**: Single `DELETE ... WHERE key IN (...)` query
+- **`mdel`**: Chunked `DELETE ... WHERE key IN (...)` statements (900 keys per chunk) executed atomically inside a single transaction to stay under SQLite's bind-variable limit
 
 ## Maintenance
 

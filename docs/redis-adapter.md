@@ -166,7 +166,7 @@ await cache.set("dates", {
 });
 ```
 
-`get()` and `mget()` treat an unparseable (corrupt or legacy) cached payload as a miss and delete the offending key, so a single bad entry can't fail a read or a whole batch.
+`get()` and `mget()` treat an unparseable (corrupt or legacy) cached payload as a miss and delete the offending key, so a single bad entry can't fail a read or a whole batch. Because this deletion happens on read, with an empty `prefix` on a shared database an unparseable foreign key read through the adapter will be deleted — one more reason to always set a `prefix`.
 
 ## Production Tips
 

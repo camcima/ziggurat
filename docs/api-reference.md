@@ -18,13 +18,14 @@ new CacheManager(options: CacheManagerOptions)
 
 **`CacheManagerOptions`**:
 
-| Property       | Type                               | Default              | Description                                                                              |
-| -------------- | ---------------------------------- | -------------------- | ---------------------------------------------------------------------------------------- |
-| `layers`       | `CacheAdapter[]`                   | _(required)_         | Ordered array of cache layers. L1 is index 0 (fastest).                                  |
-| `namespace`    | `string`                           | _none_               | Prefix prepended to all keys as `namespace:key`. Useful for logical grouping.            |
-| `syncBackfill` | `boolean`                          | `false`              | When `true`, waits for backfill to complete before returning.                            |
-| `stampede`     | `StampedeConfig`                   | `{ coalesce: true }` | Stampede protection configuration.                                                       |
-| `events`       | `TypedEventEmitter<CacheEventMap>` | _(auto-created)_     | Optional shared event emitter for observability. If omitted, an internal one is created. |
+| Property       | Type                               | Default              | Description                                                                                                                           |
+| -------------- | ---------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `layers`       | `CacheAdapter[]`                   | _(required)_         | Ordered array of cache layers. L1 is index 0 (fastest). Must contain at least one adapter — the constructor throws on an empty array. |
+| `namespace`    | `string`                           | _none_               | Prefix prepended to all keys as `namespace:key`. Useful for logical grouping.                                                         |
+| `syncBackfill` | `boolean`                          | `false`              | When `true`, waits for backfill to complete before returning.                                                                         |
+| `strictWrites` | `boolean`                          | `false`              | When `true`, `set`/`mset`/`delete`/`mdel` throw an `AggregateError` if **every** layer fails the write. `wrap()` is unaffected.       |
+| `stampede`     | `StampedeConfig`                   | `{ coalesce: true }` | Stampede protection configuration.                                                                                                    |
+| `events`       | `TypedEventEmitter<CacheEventMap>` | _(auto-created)_     | Optional shared event emitter for observability. If omitted, an internal one is created.                                              |
 
 **`StampedeConfig`**:
 
@@ -526,10 +527,13 @@ Returns a cleanup function that unsubscribes all listeners.
 
 | Metric Name                    | Attributes                       | Description                              |
 | ------------------------------ | -------------------------------- | ---------------------------------------- |
-| `ziggurat.cache.hit`           | `cache.layer`                    | Cache hits                               |
-| `ziggurat.cache.miss`          |                                  | Cache misses                             |
+| `ziggurat.cache.hit`           | `cache.layer`, `cache.operation` | Cache hits                               |
+| `ziggurat.cache.miss`          | `cache.operation`                | Cache misses                             |
 | `ziggurat.cache.set`           |                                  | Set operations                           |
 | `ziggurat.cache.delete`        |                                  | Delete operations                        |
+| `ziggurat.cache.mget`          |                                  | Number of cache mget operations          |
+| `ziggurat.cache.mset`          |                                  | Number of cache mset operations          |
+| `ziggurat.cache.mdel`          |                                  | Number of cache mdel operations          |
 | `ziggurat.cache.error`         | `cache.layer`, `cache.operation` | Layer errors                             |
 | `ziggurat.cache.backfill`      | `cache.source_layer`             | Backfill events                          |
 | `ziggurat.cache.wrap.hit`      |                                  | Wrap cache hits                          |

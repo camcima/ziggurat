@@ -192,6 +192,19 @@ describe("TTL resolution (defaultTtlMs / maxTtlMs)", () => {
     await a.set("k", "v");
     expect(a.lastTtl).toBe(30_000);
   });
+  it("rejects NaN ttlMs", async () => {
+    const a = new TtlProbeAdapter();
+    await expect(a.set("k", "v", NaN)).rejects.toThrow(/finite/);
+  });
+  it("rejects Infinity ttlMs", async () => {
+    const a = new TtlProbeAdapter();
+    await expect(a.set("k", "v", Infinity)).rejects.toThrow(/finite/);
+  });
+  it("still treats negative finite ttlMs as already expired (no throw)", async () => {
+    const a = new TtlProbeAdapter();
+    await expect(a.set("k", "v", -1000)).resolves.toBeUndefined();
+    expect(a.lastTtl).toBe(-1000);
+  });
 
   describe("constructor validation", () => {
     it("throws when maxTtlMs is NaN", () => {

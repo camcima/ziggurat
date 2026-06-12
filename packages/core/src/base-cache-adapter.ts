@@ -37,8 +37,14 @@ export abstract class BaseCacheAdapter implements CacheAdapter {
    * maxTtlMs caps the result (and bounds permanent entries).
    * Returns undefined (no expiry) only when none of ttlMs, defaultTtlMs,
    * or maxTtlMs is set.
+   * Throws when ttlMs is non-finite (NaN or ±Infinity).
    */
   protected resolveTtl(ttlMs?: number): number | undefined {
+    if (ttlMs !== undefined && !Number.isFinite(ttlMs)) {
+      throw new Error(
+        `ttlMs must be a finite number of milliseconds (received ${String(ttlMs)}).`,
+      );
+    }
     const requested = ttlMs ?? this.defaultTtlMs;
     if (this.maxTtlMs === undefined) return requested;
     if (requested === undefined) return this.maxTtlMs;

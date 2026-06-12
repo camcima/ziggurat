@@ -49,6 +49,9 @@ export class MemoryAdapter extends BaseCacheAdapter {
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
     const stored =
       this.serialization === "json" ? JSON.stringify(value) : value;
+    // JSON mode cannot represent undefined — skip the write entirely so
+    // has()/keys() stay consistent with get() reporting a miss.
+    if (this.serialization === "json" && stored === undefined) return;
     // node-cache rejects ANY set at capacity, even overwrites of existing
     // keys; delete first so existing keys can always be refreshed.
     if (this.maxKeys !== undefined && this.cache.has(key)) {

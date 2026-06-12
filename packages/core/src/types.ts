@@ -201,8 +201,8 @@ export interface MemoryAdapterOptions extends AdapterTtlOptions {
    * "json": JSON round-trip on every set/get — consistent with the Redis,
    * SQLite, and Memcache adapters and immune to caller mutation. Note the
    * caveats: non-serializable values (functions, circular references) throw
-   * at `set()` time, and `undefined` values are silently dropped by
-   * `JSON.stringify` and treated as a cache miss on read.
+   * at `set()` time, and `undefined` values are not stored at all — reads,
+   * `has()`, and `keys()` all report a miss for them.
    */
   serialization?: "reference" | "json";
 }

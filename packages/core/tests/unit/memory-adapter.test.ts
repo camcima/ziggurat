@@ -255,6 +255,14 @@ describe("MemoryAdapter", () => {
       expect(again?.value.n).toBe(1);
     });
 
+    it("json mode does not store undefined (has() consistent with get())", async () => {
+      const a = new MemoryAdapter({ serialization: "json" });
+      await a.set("k", undefined);
+      expect(await a.get("k")).toBeNull();
+      expect(await a.has("k")).toBe(false);
+      expect(await a.keys()).toHaveLength(0);
+    });
+
     it("reference mode (default) preserves object identity", async () => {
       const a = new MemoryAdapter();
       const obj = { n: 1 };

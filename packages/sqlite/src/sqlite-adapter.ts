@@ -1,4 +1,5 @@
 import type {
+  AdapterTtlOptions,
   CacheEntry,
   CacheSetEntry,
   TtlResult,
@@ -6,11 +7,23 @@ import type {
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type Database from "better-sqlite3";
 
-export interface SQLiteAdapterOptions {
+// Max keys per IN(...) chunk. SQLite caps bound params at 999 (older
+// builds) / 32766 (modern). mget binds batch.length + 2 (namespace, now);
+// mdel binds batch.length + 1 (namespace). 900 stays safe under 999.
+const MAX_BATCH_PARAMS = 900;
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
+
+export interface SQLiteAdapterOptions extends AdapterTtlOptions {
   db: Database.Database;
   tableName?: string;
   namespace?: string;
-  defaultTtlMs?: number;
 }
 
 export class SQLiteAdapter extends BaseCacheAdapter {
@@ -18,7 +31,6 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   private readonly db: Database.Database;
   private readonly tableName: string;
   private readonly namespace: string;
-  private readonly defaultTtlMs?: number;
 
   private readonly stmtGet: Database.Statement;
   private readonly stmtSet: Database.Statement;
@@ -28,6 +40,7 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   private readonly stmtGetTtl: Database.Statement;
   private readonly stmtKeys: Database.Statement;
   private readonly stmtFlushAll: Database.Statement;
+  private readonly stmtPurge: Database.Statement;
 
   private static validateTableName(name: string): void {
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
@@ -38,12 +51,11 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   }
 
   constructor(options: SQLiteAdapterOptions) {
-    super();
+    super(options);
     this.db = options.db;
     this.tableName = options.tableName ?? "ziggurat_cache";
     SQLiteAdapter.validateTableName(this.tableName);
     this.namespace = options.namespace ?? "";
-    this.defaultTtlMs = options.defaultTtlMs;
 
     // Enable WAL mode for better concurrent read performance
     this.db.pragma("journal_mode = WAL");
@@ -88,6 +100,9 @@ export class SQLiteAdapter extends BaseCacheAdapter {
       `SELECT key FROM ${this.tableName} WHERE namespace = ? AND (expires_at IS NULL OR expires_at > ?)`,
     );
     this.stmtFlushAll = this.db.prepare(`DELETE FROM ${this.tableName}`);
+    this.stmtPurge = this.db.prepare(
+      `DELETE FROM ${this.tableName} WHERE namespace = ? AND expires_at IS NOT NULL AND expires_at <= ?`,
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
@@ -102,13 +117,20 @@ export class SQLiteAdapter extends BaseCacheAdapter {
       return null;
     }
 
-    const parsed = JSON.parse(row.value) as T;
+    let parsed: T;
+    try {
+      parsed = JSON.parse(row.value) as T;
+    } catch {
+      // Corrupt/legacy payload — delete and treat as a miss (consistent with Redis/Memcache).
+      this.stmtDel.run(this.namespace, key);
+      return null;
+    }
     return { value: parsed, expiresAt: row.expires_at };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/require-await
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    const effectiveTtl = this.defaultTtlMs ?? ttlMs;
+    const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
     const expiresAt =
@@ -165,23 +187,42 @@ export class SQLiteAdapter extends BaseCacheAdapter {
     if (keys.length === 0) return new Map();
 
     const now = Date.now();
-    const placeholders = keys.map(() => "?").join(",");
-    const stmt = this.db.prepare(
-      `SELECT key, value, expires_at FROM ${this.tableName}
-       WHERE namespace = ? AND key IN (${placeholders})
-       AND (expires_at IS NULL OR expires_at > ?)`,
-    );
-    const params = [this.namespace, ...keys, now];
-    const rows = stmt.all(...params) as Array<{
-      key: string;
-      value: string;
-      expires_at: number | null;
-    }>;
-
     const result = new Map<string, CacheEntry<T>>();
-    for (const row of rows) {
-      const parsed = JSON.parse(row.value) as T;
-      result.set(row.key, { value: parsed, expiresAt: row.expires_at });
+    const corruptKeys: string[] = [];
+    for (const batch of chunk(keys, MAX_BATCH_PARAMS)) {
+      const placeholders = batch.map(() => "?").join(",");
+      const stmt = this.db.prepare(
+        `SELECT key, value, expires_at FROM ${this.tableName}
+         WHERE namespace = ? AND key IN (${placeholders})
+         AND (expires_at IS NULL OR expires_at > ?)`,
+      );
+      const rows = stmt.all(this.namespace, ...batch, now) as Array<{
+        key: string;
+        value: string;
+        expires_at: number | null;
+      }>;
+      for (const row of rows) {
+        let parsed: T;
+        try {
+          parsed = JSON.parse(row.value) as T;
+        } catch {
+          corruptKeys.push(row.key);
+          continue;
+        }
+        result.set(row.key, { value: parsed, expiresAt: row.expires_at });
+      }
+    }
+    if (corruptKeys.length > 0) {
+      const deleteCorrupt = this.db.transaction((batches: string[][]) => {
+        for (const batch of batches) {
+          const placeholders = batch.map(() => "?").join(",");
+          const stmt = this.db.prepare(
+            `DELETE FROM ${this.tableName} WHERE namespace = ? AND key IN (${placeholders})`,
+          );
+          stmt.run(this.namespace, ...batch);
+        }
+      });
+      deleteCorrupt(chunk(corruptKeys, MAX_BATCH_PARAMS));
     }
     return result;
   }
@@ -193,7 +234,7 @@ export class SQLiteAdapter extends BaseCacheAdapter {
     const insertMany = this.db.transaction(
       (items: readonly CacheSetEntry<T>[]) => {
         for (const entry of items) {
-          const effectiveTtl = this.defaultTtlMs ?? entry.ttlMs;
+          const effectiveTtl = this.resolveTtl(entry.ttlMs);
           // ttlMs <= 0 means already expired — don't store
           if (effectiveTtl !== undefined && effectiveTtl <= 0) continue;
           const expiresAt =
@@ -210,15 +251,36 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   async mdel(keys: readonly string[]): Promise<void> {
     if (keys.length === 0) return;
 
-    const placeholders = keys.map(() => "?").join(",");
-    const stmt = this.db.prepare(
-      `DELETE FROM ${this.tableName} WHERE namespace = ? AND key IN (${placeholders})`,
-    );
-    stmt.run(this.namespace, ...keys);
+    const deleteMany = this.db.transaction((batches: string[][]) => {
+      for (const batch of batches) {
+        const placeholders = batch.map(() => "?").join(",");
+        const stmt = this.db.prepare(
+          `DELETE FROM ${this.tableName} WHERE namespace = ? AND key IN (${placeholders})`,
+        );
+        stmt.run(this.namespace, ...batch);
+      }
+    });
+    deleteMany(chunk(keys, MAX_BATCH_PARAMS));
   }
 
+  /**
+   * Delete ALL rows in the cache table across EVERY namespace. Unlike
+   * clear() (which is scoped to this adapter's namespace), flushAll()
+   * wipes the whole table — use clear() for a per-namespace reset.
+   */
   // eslint-disable-next-line @typescript-eslint/require-await
   async flushAll(): Promise<void> {
     this.stmtFlushAll.run();
+  }
+
+  /**
+   * Delete all expired rows for this adapter's namespace and return the
+   * number of rows removed. Expired rows are otherwise only cleaned up
+   * lazily on access — call this periodically in long-running processes.
+   */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async purgeExpired(): Promise<number> {
+    const result = this.stmtPurge.run(this.namespace, Date.now());
+    return result.changes;
   }
 }

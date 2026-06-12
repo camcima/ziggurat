@@ -3,6 +3,7 @@ import { CacheManager } from "../../src/cache-manager.js";
 import { MemoryAdapter } from "../../src/memory-adapter.js";
 import { BaseCacheAdapter } from "../../src/base-cache-adapter.js";
 import type {
+  CacheAdapter,
   CacheEntry,
   CacheHitEvent,
   CacheMissEvent,
@@ -248,7 +249,7 @@ describe("CacheManager (single-layer)", () => {
       const a2 = new MemoryAdapter();
       const mgr = new CacheManager({ layers: [a1, a2] });
       const first = mgr.getLayers();
-      first.push(new MemoryAdapter());
+      (first as CacheAdapter[]).push(new MemoryAdapter());
       const second = mgr.getLayers();
       expect(second).toHaveLength(2);
       expect(first).not.toBe(second);
@@ -546,6 +547,98 @@ describe("CacheManager events", () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].operation).toBe("getTtl");
     });
+
+    it("should emit error event when a backfill write fails on get", async () => {
+      const l1 = new MemoryAdapter();
+      vi.spyOn(l1, "set").mockRejectedValue(new Error("l1 down"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k", "v");
+      const cache = new CacheManager({ layers: [l1, l2], syncBackfill: true });
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const entry = await cache.get("k");
+
+      expect(entry?.value).toBe("v");
+      expect(errors).toHaveLength(1);
+      expect(errors[0].operation).toBe("backfill");
+      expect(errors[0].layerName).toBe("memory");
+      expect(errors[0].layerIndex).toBe(0);
+    });
+
+    it("should emit error event when a backfill write fails on mget", async () => {
+      const l1 = new MemoryAdapter();
+      vi.spyOn(l1, "mset").mockRejectedValue(new Error("l1 down"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k1", "v1");
+      const cache = new CacheManager({ layers: [l1, l2], syncBackfill: true });
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const result = await cache.mget(["k1"]);
+
+      expect(result.get("k1")?.value).toBe("v1");
+      expect(errors).toHaveLength(1);
+      expect(errors[0].operation).toBe("backfill");
+      expect(errors[0].key).toBe("k1");
+    });
+
+    it("should emit backfill error on the async (fire-and-forget) get path", async () => {
+      const l1 = new MemoryAdapter();
+      vi.spyOn(l1, "set").mockRejectedValue(new Error("l1 down"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k", "v");
+      const cache = new CacheManager({ layers: [l1, l2] }); // syncBackfill defaults to false
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const entry = await cache.get("k");
+      expect(entry?.value).toBe("v");
+
+      await vi.waitFor(() => {
+        expect(errors).toHaveLength(1);
+      });
+      expect(errors[0].operation).toBe("backfill");
+      expect(errors[0].layerIndex).toBe(0);
+    });
+
+    it("should emit backfill error on the async (fire-and-forget) mget path", async () => {
+      const l1 = new MemoryAdapter();
+      vi.spyOn(l1, "mset").mockRejectedValue(new Error("l1 down"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k1", "v1");
+      const cache = new CacheManager({ layers: [l1, l2] });
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const result = await cache.mget(["k1"]);
+      expect(result.get("k1")?.value).toBe("v1");
+
+      await vi.waitFor(() => {
+        expect(errors).toHaveLength(1);
+      });
+      expect(errors[0].operation).toBe("backfill");
+      expect(errors[0].key).toBe("k1");
+    });
+
+    it("should emit error event when a layer throws on mget and fall through", async () => {
+      const failing = new MemoryAdapter();
+      vi.spyOn(failing, "mget").mockRejectedValue(new Error("boom"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k1", "v1");
+      const cache = new CacheManager({ layers: [failing, l2] });
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const result = await cache.mget(["k1"]);
+
+      expect(result.get("k1")?.value).toBe("v1");
+      const mgetErrors = errors.filter((e) => e.operation === "mget");
+      expect(mgetErrors).toHaveLength(1);
+      expect(mgetErrors[0].operation).toBe("mget");
+      expect(mgetErrors[0].layerIndex).toBe(0);
+      expect(mgetErrors[0].key).toBe("k1");
+    });
   });
 
   describe("backfill", () => {
@@ -718,5 +811,131 @@ describe("CacheManager events", () => {
       await manager.get("key1");
       expect(hits).toHaveLength(1);
     });
+  });
+});
+
+describe("strictWrites", () => {
+  function failingAdapter(): MemoryAdapter {
+    const a = new MemoryAdapter();
+    vi.spyOn(a, "set").mockRejectedValue(new Error("down"));
+    vi.spyOn(a, "mset").mockRejectedValue(new Error("down"));
+    vi.spyOn(a, "delete").mockRejectedValue(new Error("down"));
+    vi.spyOn(a, "mdel").mockRejectedValue(new Error("down"));
+    return a;
+  }
+
+  it("throws AggregateError when ALL layers fail a set", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter(), failingAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.set("k", "v")).rejects.toBeInstanceOf(AggregateError);
+  });
+
+  it("does not throw when at least one layer succeeds", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter(), new MemoryAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.set("k", "v")).resolves.toBeUndefined();
+  });
+
+  it("defaults to non-strict (never throws)", async () => {
+    const cache = new CacheManager({ layers: [failingAdapter()] });
+    await expect(cache.set("k", "v")).resolves.toBeUndefined();
+  });
+
+  it("applies to delete", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.delete("k")).rejects.toBeInstanceOf(AggregateError);
+  });
+
+  it("applies to mset", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.mset([{ key: "k", value: "v" }])).rejects.toBeInstanceOf(
+      AggregateError,
+    );
+  });
+
+  it("applies to mdel", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter()],
+      strictWrites: true,
+    });
+    await expect(cache.mdel(["k"])).rejects.toBeInstanceOf(AggregateError);
+  });
+
+  it("includes all layer failures and a descriptive message in the AggregateError", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter(), failingAdapter()],
+      strictWrites: true,
+    });
+    const err = await cache.set("k", "v").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AggregateError);
+    const ae = err as AggregateError;
+    expect(ae.errors).toHaveLength(2);
+    expect(ae.message).toMatch(/All 2 cache layer/);
+  });
+
+  it("emits per-layer error events before throwing", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter(), failingAdapter()],
+      strictWrites: true,
+    });
+    const fired: string[] = [];
+    cache.on("error", (e) => fired.push(e.layerName));
+    await expect(cache.set("k", "v")).rejects.toBeInstanceOf(AggregateError);
+    expect(fired).toHaveLength(2);
+  });
+
+  it("wrap returns the computed value even when caching it fails under strictWrites", async () => {
+    const cache = new CacheManager({
+      layers: [failingAdapter()],
+      strictWrites: true,
+    });
+    const errors: string[] = [];
+    cache.on("error", (e) => errors.push(e.operation));
+    const value = await cache.wrap("k", async () => "computed");
+    expect(value).toBe("computed");
+    // the failed cache write surfaced as an error event, not a throw
+    expect(errors).toContain("set");
+  });
+});
+
+describe("constructor validation", () => {
+  it("throws when layers is empty", () => {
+    expect(() => new CacheManager({ layers: [] })).toThrow(
+      "CacheManager requires at least one layer",
+    );
+  });
+
+  it("copies the layers array (later mutation of the input has no effect)", async () => {
+    const adapter = new MemoryAdapter();
+    const layers = [adapter];
+    const cache = new CacheManager({ layers });
+    layers.pop();
+    await cache.set("k", "v");
+    expect((await cache.get("k"))?.value).toBe("v");
+  });
+
+  it("treats stampede: { coalesce: undefined } as coalesce enabled", async () => {
+    const cache = new CacheManager({
+      layers: [new MemoryAdapter()],
+      stampede: { coalesce: undefined },
+    });
+    let calls = 0;
+    const factory = async () => {
+      calls++;
+      await new Promise((r) => setTimeout(r, 10));
+      return "v";
+    };
+    await Promise.all([cache.wrap("k", factory), cache.wrap("k", factory)]);
+    expect(calls).toBe(1);
   });
 });

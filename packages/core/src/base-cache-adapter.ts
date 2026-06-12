@@ -1,4 +1,5 @@
 import type {
+  AdapterTtlOptions,
   CacheAdapter,
   CacheEntry,
   CacheSetEntry,
@@ -7,6 +8,49 @@ import type {
 
 export abstract class BaseCacheAdapter implements CacheAdapter {
   abstract readonly name: string;
+  private readonly defaultTtlMs?: number;
+  private readonly maxTtlMs?: number;
+
+  constructor(ttlOptions: AdapterTtlOptions = {}) {
+    BaseCacheAdapter.assertValidTtlOption(
+      "defaultTtlMs",
+      ttlOptions.defaultTtlMs,
+    );
+    BaseCacheAdapter.assertValidTtlOption("maxTtlMs", ttlOptions.maxTtlMs);
+    this.defaultTtlMs = ttlOptions.defaultTtlMs;
+    this.maxTtlMs = ttlOptions.maxTtlMs;
+  }
+
+  private static assertValidTtlOption(
+    name: string,
+    value: number | undefined,
+  ): void {
+    if (value !== undefined && (!Number.isFinite(value) || value < 0)) {
+      throw new Error(
+        `${name} must be a finite, non-negative number of milliseconds (received ${String(value)}).`,
+      );
+    }
+  }
+
+  /**
+   * Resolve the effective TTL: explicit ttlMs wins over defaultTtlMs;
+   * maxTtlMs caps the result (and bounds permanent entries).
+   * Returns undefined (no expiry) only when none of ttlMs, defaultTtlMs,
+   * or maxTtlMs is set.
+   * Throws when ttlMs is non-finite (NaN or ±Infinity).
+   */
+  protected resolveTtl(ttlMs?: number): number | undefined {
+    if (ttlMs !== undefined && !Number.isFinite(ttlMs)) {
+      throw new Error(
+        `ttlMs must be a finite number of milliseconds (received ${String(ttlMs)}).`,
+      );
+    }
+    const requested = ttlMs ?? this.defaultTtlMs;
+    if (this.maxTtlMs === undefined) return requested;
+    if (requested === undefined) return this.maxTtlMs;
+    return Math.min(requested, this.maxTtlMs);
+  }
+
   abstract get<T>(key: string): Promise<CacheEntry<T> | null>;
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   abstract set<T>(key: string, value: T, ttlMs?: number): Promise<void>;

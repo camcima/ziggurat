@@ -68,6 +68,24 @@ describe("MemcacheAdapter", () => {
       const result = await adapter.get<{ foo: string }>("key1");
       expect(result!.value).toEqual({ foo: "bar" });
     });
+
+    it("returns null and deletes the key on corrupt JSON", async () => {
+      await mockClient.set("bad", "{not json");
+      const result = await adapter.get("bad");
+      expect(result).toBeNull();
+      expect(mockClient.delete).toHaveBeenCalledWith("bad");
+    });
+
+    it("deletes the prefixed key on corrupt JSON when a prefix is set", async () => {
+      const prefixed = new MemcacheAdapter({
+        client: mockClient,
+        prefix: "app:",
+      });
+      await mockClient.set("app:bad", "{not json");
+      const result = await prefixed.get("bad");
+      expect(result).toBeNull();
+      expect(mockClient.delete).toHaveBeenCalledWith("app:bad");
+    });
   });
 
   describe("set", () => {
@@ -160,6 +178,37 @@ describe("MemcacheAdapter", () => {
     });
   });
 
+  describe("TTLs over 30 days", () => {
+    it("converts TTLs over 30 days to an absolute unix timestamp", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-06-11T00:00:00Z"));
+      try {
+        const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+        await adapter.set("k", "v", sixtyDaysMs);
+        const expectedAbsolute = Math.ceil((Date.now() + sixtyDaysMs) / 1000);
+        expect(mockClient.set).toHaveBeenCalledWith("k", expect.any(String), {
+          expires: expectedAbsolute,
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("sends exactly 30 days as a relative TTL (not absolute)", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-06-11T00:00:00Z"));
+      try {
+        const thirtyDaysMs = 60 * 60 * 24 * 30 * 1000;
+        await adapter.set("k", "v", thirtyDaysMs);
+        expect(mockClient.set).toHaveBeenCalledWith("k", expect.any(String), {
+          expires: 2592000,
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   describe("defaultTtlMs", () => {
     it("should use defaultTtlMs when no ttlMs is passed", async () => {
       const a = new MemcacheAdapter({
@@ -173,13 +222,27 @@ describe("MemcacheAdapter", () => {
       });
     });
 
-    it("should use defaultTtlMs over caller-provided ttlMs", async () => {
+    it("should use caller-provided ttlMs over defaultTtlMs", async () => {
       const a = new MemcacheAdapter({
         client: mockClient,
         defaultTtlMs: 5000,
       });
 
       await a.set("key1", "value1", 60000);
+      // explicit 60000ms wins over defaultTtlMs 5000ms → 60 seconds
+      expect(mockClient.set).toHaveBeenCalledWith("key1", expect.any(String), {
+        expires: 60,
+      });
+    });
+
+    it("should cap ttlMs at maxTtlMs", async () => {
+      const a = new MemcacheAdapter({
+        client: mockClient,
+        maxTtlMs: 5000,
+      });
+
+      await a.set("key1", "value1", 60000);
+      // maxTtlMs 5000ms caps the 60000ms → 5 seconds
       expect(mockClient.set).toHaveBeenCalledWith("key1", expect.any(String), {
         expires: 5,
       });

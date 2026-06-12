@@ -12,6 +12,9 @@
     "access": "public"
   },
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -48,9 +51,9 @@
     "@ziggurat-cache/core": "workspace:*"
   },
   "peerDependencies": {
-    "@nestjs/common": "^10.0.0",
-    "@nestjs/core": "^10.0.0",
-    "reflect-metadata": "^0.2.0"
+    "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "@nestjs/core": "^10.0.0 || ^11.0.0",
+    "reflect-metadata": "^0.1.12 || ^0.2.0"
   },
   "devDependencies": {
     "@nestjs/common": "^11.1.24",

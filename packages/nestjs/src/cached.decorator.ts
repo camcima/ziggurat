@@ -21,7 +21,7 @@ export function Cached(options: CachedDecoratorOptions): MethodDecorator {
 
     injectCacheManager(target, cacheManagerKey);
 
-    descriptor.value = async function (this: any, ...args: any[]) {
+    const wrapped = async function (this: any, ...args: any[]) {
       const cacheManager: CacheManager = this[cacheManagerKey];
       const cacheKey = options.key(...args);
 
@@ -32,6 +32,25 @@ export function Cached(options: CachedDecoratorOptions): MethodDecorator {
       );
     };
 
+    // Preserve metadata stamped on the original method by other decorators
+    // (NestJS route decorators, @SetMetadata, etc.).
+    if (typeof Reflect.getMetadataKeys === "function") {
+      for (const metadataKey of Reflect.getMetadataKeys(originalMethod)) {
+        Reflect.defineMetadata(
+          metadataKey,
+          Reflect.getMetadata(metadataKey, originalMethod),
+          wrapped,
+        );
+      }
+    }
+
+    // Preserve the original method name for stack traces / logging.
+    Object.defineProperty(wrapped, "name", {
+      value: String(propertyKey),
+      configurable: true,
+    });
+
+    descriptor.value = wrapped;
     return descriptor;
   };
 }

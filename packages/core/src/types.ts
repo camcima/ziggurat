@@ -14,6 +14,19 @@ export type TtlResult =
   | { kind: "permanent" }
   | { kind: "expiring"; ttlMs: number };
 
+export interface AdapterTtlOptions {
+  /**
+   * Fallback TTL in milliseconds, applied when set()/mset() is called
+   * without an explicit ttlMs. An explicit ttlMs always wins.
+   */
+  defaultTtlMs?: number;
+  /**
+   * Upper bound in milliseconds applied to every entry — explicit TTLs,
+   * defaultTtlMs, and otherwise-permanent entries are all capped to this.
+   */
+  maxTtlMs?: number;
+}
+
 export interface CacheAdapter {
   readonly name: string;
   get<T>(key: string): Promise<CacheEntry<T> | null>;
@@ -74,7 +87,8 @@ export interface CacheErrorEvent {
     | "getTtl"
     | "mget"
     | "mset"
-    | "mdel";
+    | "mdel"
+    | "backfill";
   layerName: string;
   layerIndex: number;
   error: unknown;
@@ -151,8 +165,44 @@ export interface CacheManagerOptions {
   syncBackfill?: boolean;
   stampede?: StampedeConfig;
   events?: TypedEventEmitter<CacheEventMap>;
+  /**
+   * When true, set/mset/delete/mdel throw an AggregateError if EVERY
+   * layer fails the write. Default false (writes never throw; failures
+   * are observable only via "error" events).
+   *
+   * In a single-layer configuration, any write failure will throw because
+   * "every layer" is the one layer.
+   *
+   * `wrap()` is unaffected by this option — it always returns the computed
+   * factory value and surfaces cache-write failures only via "error" events.
+   */
+  strictWrites?: boolean;
 }
 
-export interface MemoryAdapterOptions {
-  defaultTtlMs?: number;
+export interface MemoryAdapterOptions extends AdapterTtlOptions {
+  /**
+   * Interval in ms for proactive eviction of expired entries.
+   * Default 0 (disabled): expired entries are removed only when accessed,
+   * so write-heavy/read-rarely workloads can grow unboundedly.
+   * Very small values create a tight eviction loop; prefer >= 1000 (1 second).
+   */
+  checkPeriodMs?: number;
+  /**
+   * Maximum number of keys; set() throws once exceeded. Default unlimited.
+   * Overwriting an existing key always succeeds even at capacity — only NEW
+   * keys beyond the cap cause set() to throw.
+   */
+  maxKeys?: number;
+  /**
+   * "reference" (default): store live references — fastest, but returned
+   * objects can be mutated by callers (poisoning the cache) and rich types
+   * (Date, Map) survive here while JSON-based layers flatten them, so
+   * multi-layer reads can return different shapes per layer.
+   * "json": JSON round-trip on every set/get — consistent with the Redis,
+   * SQLite, and Memcache adapters and immune to caller mutation. Note the
+   * caveats: non-serializable values (functions, circular references) throw
+   * at `set()` time, and `undefined` values are not stored at all — reads,
+   * `has()`, and `keys()` all report a miss for them.
+   */
+  serialization?: "reference" | "json";
 }

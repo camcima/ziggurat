@@ -6,10 +6,12 @@ export class MemoryAdapter extends BaseCacheAdapter {
   readonly name = "memory";
   private readonly cache: NodeCache;
   private readonly serialization: "reference" | "json";
+  private readonly maxKeys?: number;
 
   constructor(options: MemoryAdapterOptions = {}) {
     super(options);
     this.serialization = options.serialization ?? "reference";
+    this.maxKeys = options.maxKeys;
     this.cache = new NodeCache({
       stdTTL: 0,
       checkperiod:
@@ -43,11 +45,16 @@ export class MemoryAdapter extends BaseCacheAdapter {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/require-await
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
     const effectiveTtl = this.resolveTtl(ttlMs);
+    // ttlMs <= 0 means already expired — don't store
+    if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
     const stored =
       this.serialization === "json" ? JSON.stringify(value) : value;
+    // node-cache rejects ANY set at capacity, even overwrites of existing
+    // keys; delete first so existing keys can always be refreshed.
+    if (this.maxKeys !== undefined && this.cache.has(key)) {
+      this.cache.del(key);
+    }
     if (effectiveTtl !== undefined) {
-      // ttlMs <= 0 means already expired — don't store
-      if (effectiveTtl <= 0) return;
       this.cache.set(key, stored, effectiveTtl / 1000);
     } else {
       this.cache.set(key, stored, 0);

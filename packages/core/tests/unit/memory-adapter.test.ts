@@ -192,6 +192,15 @@ describe("MemoryAdapter", () => {
       await expect(a.set("k3", "v3")).rejects.toThrow();
     });
 
+    it("allows overwriting an existing key at maxKeys capacity", async () => {
+      const a = new MemoryAdapter({ maxKeys: 2 });
+      await a.set("k1", "v1");
+      await a.set("k2", "v2");
+      await expect(a.set("k1", "v1-updated")).resolves.toBeUndefined();
+      expect((await a.get("k1"))?.value).toBe("v1-updated");
+      await expect(a.set("k3", "v3")).rejects.toThrow();
+    });
+
     it("evicts expired entries periodically when checkPeriodMs is set", async () => {
       vi.useFakeTimers();
       try {

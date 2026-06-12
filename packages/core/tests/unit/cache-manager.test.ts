@@ -620,6 +620,25 @@ describe("CacheManager events", () => {
       expect(errors[0].operation).toBe("backfill");
       expect(errors[0].key).toBe("k1");
     });
+
+    it("should emit error event when a layer throws on mget and fall through", async () => {
+      const failing = new MemoryAdapter();
+      vi.spyOn(failing, "mget").mockRejectedValue(new Error("boom"));
+      const l2 = new MemoryAdapter();
+      await l2.set("k1", "v1");
+      const cache = new CacheManager({ layers: [failing, l2] });
+      const errors: CacheErrorEvent[] = [];
+      cache.on("error", (e) => errors.push(e));
+
+      const result = await cache.mget(["k1"]);
+
+      expect(result.get("k1")?.value).toBe("v1");
+      const mgetErrors = errors.filter((e) => e.operation === "mget");
+      expect(mgetErrors).toHaveLength(1);
+      expect(mgetErrors[0].operation).toBe("mget");
+      expect(mgetErrors[0].layerIndex).toBe(0);
+      expect(mgetErrors[0].key).toBe("k1");
+    });
   });
 
   describe("backfill", () => {

@@ -316,4 +316,63 @@ describe("instrumentCacheManager", () => {
 
     cleanup();
   });
+
+  it("should record wrap coalesce counter for concurrent wraps", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager);
+
+    const factory = async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      return "v";
+    };
+    await Promise.all([manager.wrap("k", factory), manager.wrap("k", factory)]);
+
+    const collected = await collectMetrics();
+    const coalesceMetric = findMetric(
+      collected,
+      "ziggurat.cache.wrap.coalesce",
+    );
+    expect(coalesceMetric).toBeDefined();
+    expect(coalesceMetric!.dataPoints[0].value).toBe(1);
+
+    cleanup();
+  });
+
+  it("should use a custom meter name when provided", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager, {
+      meterName: "custom-meter",
+    });
+
+    await manager.set("k", "v");
+    await manager.get("k");
+
+    const collected = await collectMetrics();
+    expect(findMetric(collected, "ziggurat.cache.hit")).toBeDefined();
+
+    cleanup();
+  });
+
+  it("should not record miss values for an all-hit mget (and vice versa)", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager);
+
+    await manager.set("k1", "v1");
+    await manager.mget(["k1"]); // all-hit: missCount === 0 branch
+    await manager.mget(["absent"]); // all-miss: hitCount === 0 branch
+
+    const collected = await collectMetrics();
+    const missMetric = findMetric(collected, "ziggurat.cache.miss");
+    const mgetMissPoints = missMetric!.dataPoints.filter(
+      (dp) => dp.attributes["cache.operation"] === "mget",
+    );
+    // only the all-miss mget contributed a miss value
+    expect(mgetMissPoints).toHaveLength(1);
+    expect(mgetMissPoints[0].value).toBe(1);
+
+    cleanup();
+  });
 });

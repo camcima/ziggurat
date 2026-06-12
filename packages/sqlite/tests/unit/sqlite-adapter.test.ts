@@ -299,6 +299,13 @@ describe("SQLiteAdapter", () => {
       expect(await adapter.get("b")).not.toBeNull();
       expect(await adapter.get("c")).toBeNull();
     });
+
+    it("mdel with an empty key array is a no-op", async () => {
+      const a = new SQLiteAdapter({ db });
+      await a.set("k", "v");
+      await expect(a.mdel([])).resolves.toBeUndefined();
+      expect(await a.has("k")).toBe(true);
+    });
   });
 
   describe("flushAll", () => {

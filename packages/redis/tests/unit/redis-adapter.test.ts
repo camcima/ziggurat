@@ -125,6 +125,15 @@ describe("RedisAdapter", () => {
       expect(result).toBeNull();
       expect(mockRedis.del).toHaveBeenCalledWith("bad");
     });
+
+    it("deletes entries whose embedded expiresAt has passed and returns null", async () => {
+      await mockRedis.set(
+        "k",
+        JSON.stringify({ value: "v", expiresAt: Date.now() - 1000 }),
+      );
+      expect(await adapter.get("k")).toBeNull();
+      expect(mockRedis.del).toHaveBeenCalledWith("k");
+    });
   });
 
   describe("set", () => {
@@ -300,6 +309,17 @@ describe("RedisAdapter", () => {
       expect(mockRedis.del).toHaveBeenCalledWith("b");
     });
 
+    it("skips entries whose embedded expiresAt has passed", async () => {
+      await adapter.set("alive", "v1");
+      await mockRedis.set(
+        "dead",
+        JSON.stringify({ value: "v2", expiresAt: Date.now() - 1000 }),
+      );
+      const result = await adapter.mget(["alive", "dead"]);
+      expect(result.get("alive")?.value).toBe("v1");
+      expect(result.has("dead")).toBe(false);
+    });
+
     it("should return successful entries and skip errored pipeline slots", async () => {
       const entry = JSON.stringify({ value: "ok", expiresAt: null });
       const failingRedis = createMockRedis();
@@ -336,6 +356,18 @@ describe("RedisAdapter", () => {
       const result = await adapter.mget<number>(["a", "b"]);
       expect(result.has("a")).toBe(false);
       expect(result.get("b")!.value).toBe(2);
+    });
+
+    it("should not execute the pipeline when every entry is skipped", async () => {
+      const pipe = mockRedis.pipeline();
+      (mockRedis.pipeline as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        pipe,
+      );
+      await adapter.mset([
+        { key: "a", value: 1, ttlMs: 0 },
+        { key: "b", value: 2, ttlMs: -5 },
+      ]);
+      expect(pipe.exec).not.toHaveBeenCalled();
     });
 
     it("should throw when pipeline returns command errors", async () => {

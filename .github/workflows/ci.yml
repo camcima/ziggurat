@@ -44,7 +44,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test:coverage
+      # Dependabot-triggered runs don't receive repository secrets, so
+      # CODECOV_TOKEN is empty and the upload fails (fatal via fail_ci_if_error).
+      # Skip the upload on those runs; coverage still uploads on normal
+      # pushes/PRs and on main, where the token is available.
       - uses: codecov/codecov-action@v6
+        if: ${{ github.actor != 'dependabot[bot]' }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: packages/core/coverage/coverage-final.json,packages/redis/coverage/coverage-final.json,packages/memcache/coverage/coverage-final.json,packages/sqlite/coverage/coverage-final.json,packages/nestjs/coverage/coverage-final.json

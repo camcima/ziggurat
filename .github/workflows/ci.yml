@@ -51,7 +51,7 @@ jobs:
       # of using CODECOV_TOKEN, so it works on Dependabot PRs (which don't get
       # repo secrets) without skipping coverage. Needs id-token: write (above).
       # Non-fork runs use OIDC; fork PRs fall back to Codecov's tokenless path.
-      - uses: codecov/codecov-action@v6
+      - uses: codecov/codecov-action@v7
         with:
           use_oidc: true
           files: packages/core/coverage/coverage-final.json,packages/redis/coverage/coverage-final.json,packages/memcache/coverage/coverage-final.json,packages/sqlite/coverage/coverage-final.json,packages/nestjs/coverage/coverage-final.json

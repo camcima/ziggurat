@@ -1,24 +1,25 @@
-import type { CacheEntry, CacheSetEntry } from "@ziggurat-cache/core";
+import type {
+  AdapterTtlOptions,
+  CacheEntry,
+  CacheSetEntry,
+} from "@ziggurat-cache/core";
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type { Redis } from "ioredis";
 
-export interface RedisAdapterOptions {
+export interface RedisAdapterOptions extends AdapterTtlOptions {
   client: Redis;
   prefix?: string;
-  defaultTtlMs?: number;
 }
 
 export class RedisAdapter extends BaseCacheAdapter {
   readonly name = "redis";
   private readonly client: Redis;
   private readonly prefix: string;
-  private readonly defaultTtlMs?: number;
 
   constructor(options: RedisAdapterOptions) {
-    super();
+    super(options);
     this.client = options.client;
     this.prefix = options.prefix ?? "";
-    this.defaultTtlMs = options.defaultTtlMs;
   }
 
   private prefixedKey(key: string): string {
@@ -29,7 +30,15 @@ export class RedisAdapter extends BaseCacheAdapter {
     const raw = await this.client.get(this.prefixedKey(key));
     if (raw === null) return null;
 
-    const entry = JSON.parse(raw) as CacheEntry<T>;
+    let entry: CacheEntry<T>;
+    try {
+      entry = JSON.parse(raw) as CacheEntry<T>;
+    } catch {
+      // Corrupt/legacy payload — delete and treat as a miss
+      await this.client.del(this.prefixedKey(key));
+      return null;
+    }
+
     if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
       await this.client.del(this.prefixedKey(key));
       return null;
@@ -40,16 +49,17 @@ export class RedisAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    const effectiveTtl = this.defaultTtlMs ?? ttlMs;
+    const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
-    const expiresAt =
-      effectiveTtl !== undefined ? Date.now() + effectiveTtl : null;
+    const ttlInt =
+      effectiveTtl !== undefined ? Math.ceil(effectiveTtl) : undefined;
+    const expiresAt = ttlInt !== undefined ? Date.now() + ttlInt : null;
     const serialized = JSON.stringify({ value, expiresAt });
     const prefixed = this.prefixedKey(key);
 
-    if (effectiveTtl !== undefined) {
-      await this.client.psetex(prefixed, effectiveTtl, serialized);
+    if (ttlInt !== undefined) {
+      await this.client.psetex(prefixed, ttlInt, serialized);
     } else {
       await this.client.set(prefixed, serialized);
     }
@@ -57,6 +67,10 @@ export class RedisAdapter extends BaseCacheAdapter {
 
   async delete(key: string): Promise<void> {
     await this.client.del(this.prefixedKey(key));
+  }
+
+  private static escapeGlob(literal: string): string {
+    return literal.replace(/[\\*?[\]]/g, "\\$&");
   }
 
   private async scanKeys(pattern: string): Promise<string[]> {
@@ -92,7 +106,7 @@ export class RedisAdapter extends BaseCacheAdapter {
   }
 
   async clear(): Promise<void> {
-    const pattern = this.prefix + "*";
+    const pattern = RedisAdapter.escapeGlob(this.prefix) + "*";
     const keys = await this.scanKeys(pattern);
     if (keys.length > 0) {
       const pipeline = this.client.pipeline();
@@ -105,7 +119,7 @@ export class RedisAdapter extends BaseCacheAdapter {
   }
 
   async keys(): Promise<string[]> {
-    const pattern = this.prefix + "*";
+    const pattern = RedisAdapter.escapeGlob(this.prefix) + "*";
     const rawKeys = await this.scanKeys(pattern);
     return rawKeys.map((k) => (this.prefix ? k.slice(this.prefix.length) : k));
   }
@@ -123,15 +137,28 @@ export class RedisAdapter extends BaseCacheAdapter {
 
     if (!results) return map;
 
+    const corruptKeys: string[] = [];
+
     for (let i = 0; i < keys.length; i++) {
       const [err, raw] = results[i] as [Error | null, string | null];
       if (err || raw === null) continue;
 
-      const entry = JSON.parse(raw) as CacheEntry<T>;
+      let entry: CacheEntry<T>;
+      try {
+        entry = JSON.parse(raw) as CacheEntry<T>;
+      } catch {
+        // Corrupt/legacy payload — treat as a miss and schedule cleanup
+        corruptKeys.push(prefixedKeys[i]);
+        continue;
+      }
       if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
         continue;
       }
       map.set(keys[i], entry);
+    }
+
+    if (corruptKeys.length > 0) {
+      await this.client.del(...corruptKeys);
     }
 
     return map;
@@ -143,16 +170,17 @@ export class RedisAdapter extends BaseCacheAdapter {
     const pipeline = this.client.pipeline();
     let queued = 0;
     for (const entry of entries) {
-      const effectiveTtl = this.defaultTtlMs ?? entry.ttlMs;
+      const effectiveTtl = this.resolveTtl(entry.ttlMs);
       // ttlMs <= 0 means already expired — don't store
       if (effectiveTtl !== undefined && effectiveTtl <= 0) continue;
-      const expiresAt =
-        effectiveTtl !== undefined ? Date.now() + effectiveTtl : null;
+      const ttlInt =
+        effectiveTtl !== undefined ? Math.ceil(effectiveTtl) : undefined;
+      const expiresAt = ttlInt !== undefined ? Date.now() + ttlInt : null;
       const serialized = JSON.stringify({ value: entry.value, expiresAt });
       const prefixed = this.prefixedKey(entry.key);
 
-      if (effectiveTtl !== undefined) {
-        pipeline.psetex(prefixed, effectiveTtl, serialized);
+      if (ttlInt !== undefined) {
+        pipeline.psetex(prefixed, ttlInt, serialized);
       } else {
         pipeline.set(prefixed, serialized);
       }
@@ -167,9 +195,5 @@ export class RedisAdapter extends BaseCacheAdapter {
     if (keys.length === 0) return;
     const prefixedKeys = keys.map((k) => this.prefixedKey(k));
     await this.client.del(...prefixedKeys);
-  }
-
-  async flushAll(): Promise<void> {
-    await this.client.flushdb();
   }
 }

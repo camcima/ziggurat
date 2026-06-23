@@ -277,6 +277,16 @@ describe("SQLiteAdapter", () => {
       expect(a!.expiresAt).toBeTypeOf("number");
       expect(b!.expiresAt).toBeNull();
     });
+
+    it("should cap ttlMs at maxTtlMs in mset", async () => {
+      const cappedAdapter = new SQLiteAdapter({ db, maxTtlMs: 5000 });
+      await cappedAdapter.mset([{ key: "k", value: "v", ttlMs: 60_000 }]);
+      const ttl = await cappedAdapter.getTtl("k");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        expect(ttl.ttlMs).toBeLessThanOrEqual(5000);
+      }
+    });
   });
 
   describe("mdel", () => {
@@ -288,6 +298,13 @@ describe("SQLiteAdapter", () => {
       expect(await adapter.get("a")).toBeNull();
       expect(await adapter.get("b")).not.toBeNull();
       expect(await adapter.get("c")).toBeNull();
+    });
+
+    it("mdel with an empty key array is a no-op", async () => {
+      const a = new SQLiteAdapter({ db });
+      await a.set("k", "v");
+      await expect(a.mdel([])).resolves.toBeUndefined();
+      expect(await a.has("k")).toBe(true);
     });
   });
 
@@ -303,6 +320,95 @@ describe("SQLiteAdapter", () => {
     });
   });
 
+  describe("purgeExpired", () => {
+    it("deletes expired rows for this namespace and returns the count", async () => {
+      const a = new SQLiteAdapter({ db });
+      await a.set("expired1", "v", 1);
+      await a.set("expired2", "v", 1);
+      await a.set("alive", "v", 60_000);
+      await a.set("permanent", "v");
+      await new Promise((r) => setTimeout(r, 50));
+
+      const purged = await a.purgeExpired();
+
+      expect(purged).toBe(2);
+      expect(await a.has("alive")).toBe(true);
+      expect(await a.has("permanent")).toBe(true);
+    });
+
+    it("does not purge other namespaces", async () => {
+      const a = new SQLiteAdapter({ db, namespace: "a" });
+      const b = new SQLiteAdapter({ db, namespace: "b" });
+      await a.set("k", "v", 1);
+      await b.set("k", "v", 1);
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(await a.purgeExpired()).toBe(1);
+      expect(await b.purgeExpired()).toBe(1);
+    });
+
+    it("returns 0 when there are no expired rows", async () => {
+      const a = new SQLiteAdapter({ db });
+      await a.set("alive", "v", 60_000);
+      await a.set("permanent", "v");
+      expect(await a.purgeExpired()).toBe(0);
+      expect(await a.has("alive")).toBe(true);
+      expect(await a.has("permanent")).toBe(true);
+    });
+  });
+
+  describe("large batches", () => {
+    it("handles mget/mdel with more keys than SQLite's bind-variable limit", async () => {
+      const a = new SQLiteAdapter({ db });
+      const keys = Array.from(
+        { length: 40_000 },
+        (_, i) => `bulk:${String(i)}`,
+      );
+      await a.mset(keys.map((key) => ({ key, value: key })));
+
+      const fetched = await a.mget(keys);
+      expect(fetched.size).toBe(40_000);
+
+      // keys straddling chunk boundaries (size 900) must all be retrieved
+      expect(fetched.get("bulk:899")).toBeDefined();
+      expect(fetched.get("bulk:900")).toBeDefined();
+      expect(fetched.get("bulk:1800")).toBeDefined();
+
+      await a.mdel(keys);
+      expect((await a.mget(keys.slice(0, 10))).size).toBe(0);
+    });
+  });
+
+  describe("corrupt entries", () => {
+    it("get() deletes a corrupt row and returns null", async () => {
+      const a = new SQLiteAdapter({ db });
+      db.prepare(
+        "INSERT INTO ziggurat_cache (namespace, key, value, expires_at) VALUES (?, ?, ?, ?)",
+      ).run("", "bad", "{not json", null);
+      expect(await a.get("bad")).toBeNull();
+      // row was cleaned up
+      const row = db
+        .prepare("SELECT 1 FROM ziggurat_cache WHERE namespace = ? AND key = ?")
+        .get("", "bad");
+      expect(row).toBeUndefined();
+    });
+
+    it("mget() skips and deletes corrupt rows, returns the good ones", async () => {
+      const a = new SQLiteAdapter({ db });
+      await a.set("good", "v1");
+      db.prepare(
+        "INSERT INTO ziggurat_cache (namespace, key, value, expires_at) VALUES (?, ?, ?, ?)",
+      ).run("", "bad", "{not json", null);
+      const result = await a.mget(["good", "bad"]);
+      expect(result.get("good")?.value).toBe("v1");
+      expect(result.has("bad")).toBe(false);
+      const row = db
+        .prepare("SELECT 1 FROM ziggurat_cache WHERE namespace = ? AND key = ?")
+        .get("", "bad");
+      expect(row).toBeUndefined();
+    });
+  });
+
   describe("defaultTtlMs", () => {
     it("should use defaultTtlMs when no ttlMs is passed", async () => {
       const a = new SQLiteAdapter({ db, defaultTtlMs: 5000 });
@@ -311,13 +417,26 @@ describe("SQLiteAdapter", () => {
       expect(result!.expiresAt).toBeTypeOf("number");
     });
 
-    it("should use defaultTtlMs over caller-provided ttlMs", async () => {
+    it("should use caller-provided ttlMs over defaultTtlMs", async () => {
       const a = new SQLiteAdapter({ db, defaultTtlMs: 5000 });
       await a.set("key1", "value1", 60000);
-      const result = await a.get<string>("key1");
-      // Should use adapter's 5000ms, not caller's 60000ms
-      const remaining = result!.expiresAt! - Date.now();
-      expect(remaining).toBeLessThan(6000);
+      const ttl = await a.getTtl("key1");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        // explicit 60000ms wins over defaultTtlMs 5000ms
+        expect(ttl.ttlMs).toBeGreaterThan(5000);
+        expect(ttl.ttlMs).toBeLessThanOrEqual(60000);
+      }
+    });
+
+    it("should cap ttlMs at maxTtlMs", async () => {
+      const a = new SQLiteAdapter({ db, maxTtlMs: 5000 });
+      await a.set("key1", "value1", 60000);
+      const ttl = await a.getTtl("key1");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        expect(ttl.ttlMs).toBeLessThanOrEqual(5000);
+      }
     });
   });
 });

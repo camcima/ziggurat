@@ -97,13 +97,13 @@ import Redis from "ioredis";
 const cache = new CacheManager({
   namespace: "products",
   layers: [
-    new MemoryAdapter({ defaultTtlMs: 30_000 }), // L1: 30s
+    new MemoryAdapter({ maxTtlMs: 30_000 }), // L1: capped at 30s
     new RedisAdapter({ client: new Redis(), defaultTtlMs: 600_000 }), // L2: 10min
   ],
 });
 ```
 
-Reads check L1 first. On an L1 miss, L2 is checked. If L2 has the value, it's returned and L1 is automatically backfilled using L1's own `defaultTtlMs` so the next read is served from memory.
+Reads check L1 first. On an L1 miss, L2 is checked. If L2 has the value, it's returned and L1 is automatically backfilled with the entry's remaining TTL, capped at L1's `maxTtlMs`, so the next read is served from memory.
 
 ## What's Next
 

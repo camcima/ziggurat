@@ -118,6 +118,22 @@ describe("RedisAdapter", () => {
       expect(result!.value).toEqual({ foo: "bar" });
       expect(result!.expiresAt).toBe(expiresAt);
     });
+
+    it("returns null and deletes the key on corrupt JSON", async () => {
+      await mockRedis.set("bad", "{not json");
+      const result = await adapter.get("bad");
+      expect(result).toBeNull();
+      expect(mockRedis.del).toHaveBeenCalledWith("bad");
+    });
+
+    it("deletes entries whose embedded expiresAt has passed and returns null", async () => {
+      await mockRedis.set(
+        "k",
+        JSON.stringify({ value: "v", expiresAt: Date.now() - 1000 }),
+      );
+      expect(await adapter.get("k")).toBeNull();
+      expect(mockRedis.del).toHaveBeenCalledWith("k");
+    });
   });
 
   describe("set", () => {
@@ -143,6 +159,15 @@ describe("RedisAdapter", () => {
       const call = (mockRedis.set as ReturnType<typeof vi.fn>).mock.calls[0];
       const stored = JSON.parse(call[1] as string);
       expect(stored.value).toEqual({ nested: { data: [1, 2] } });
+    });
+
+    it("rounds fractional ttlMs up to an integer for PSETEX", async () => {
+      await adapter.set("k", "v", 1500.5);
+      expect(mockRedis.psetex).toHaveBeenCalledWith(
+        "k",
+        1501,
+        expect.any(String),
+      );
     });
   });
 
@@ -176,14 +201,28 @@ describe("RedisAdapter", () => {
       expect(mockRedis.set).not.toHaveBeenCalled();
     });
 
-    it("should use defaultTtlMs over caller-provided ttlMs", async () => {
+    it("should use caller-provided ttlMs over defaultTtlMs", async () => {
       const a = new RedisAdapter({
         client: mockRedis,
         defaultTtlMs: 5000,
       });
 
       await a.set("key1", "value1", 60000);
-      // Should use adapter's 5000ms, not caller's 60000ms
+      // explicit 60000ms wins over defaultTtlMs 5000ms
+      expect(mockRedis.psetex).toHaveBeenCalledWith(
+        "key1",
+        60000,
+        expect.any(String),
+      );
+    });
+
+    it("should cap ttlMs at maxTtlMs", async () => {
+      const a = new RedisAdapter({
+        client: mockRedis,
+        maxTtlMs: 5000,
+      });
+
+      await a.set("key1", "value1", 60000);
       expect(mockRedis.psetex).toHaveBeenCalledWith(
         "key1",
         5000,
@@ -251,6 +290,36 @@ describe("RedisAdapter", () => {
       expect(result.size).toBe(0);
     });
 
+    it("skips corrupt JSON entries in mget instead of throwing", async () => {
+      await adapter.set("good", "v1");
+      await mockRedis.set("bad", "{not json");
+      const result = await adapter.mget(["good", "bad"]);
+      expect(result.get("good")?.value).toBe("v1");
+      expect(result.has("bad")).toBe(false);
+    });
+
+    it("skips and cleans up a corrupt entry in the middle of a batch", async () => {
+      await adapter.set("a", "v1");
+      await mockRedis.set("b", "{not json");
+      await adapter.set("c", "v3");
+      const result = await adapter.mget(["a", "b", "c"]);
+      expect(result.get("a")?.value).toBe("v1");
+      expect(result.has("b")).toBe(false);
+      expect(result.get("c")?.value).toBe("v3");
+      expect(mockRedis.del).toHaveBeenCalledWith("b");
+    });
+
+    it("skips entries whose embedded expiresAt has passed", async () => {
+      await adapter.set("alive", "v1");
+      await mockRedis.set(
+        "dead",
+        JSON.stringify({ value: "v2", expiresAt: Date.now() - 1000 }),
+      );
+      const result = await adapter.mget(["alive", "dead"]);
+      expect(result.get("alive")?.value).toBe("v1");
+      expect(result.has("dead")).toBe(false);
+    });
+
     it("should return successful entries and skip errored pipeline slots", async () => {
       const entry = JSON.stringify({ value: "ok", expiresAt: null });
       const failingRedis = createMockRedis();
@@ -289,6 +358,18 @@ describe("RedisAdapter", () => {
       expect(result.get("b")!.value).toBe(2);
     });
 
+    it("should not execute the pipeline when every entry is skipped", async () => {
+      const pipe = mockRedis.pipeline();
+      (mockRedis.pipeline as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        pipe,
+      );
+      await adapter.mset([
+        { key: "a", value: 1, ttlMs: 0 },
+        { key: "b", value: 2, ttlMs: -5 },
+      ]);
+      expect(pipe.exec).not.toHaveBeenCalled();
+    });
+
     it("should throw when pipeline returns command errors", async () => {
       const failingRedis = createMockRedis();
       const failingAdapter = new RedisAdapter({ client: failingRedis });
@@ -309,6 +390,28 @@ describe("RedisAdapter", () => {
       await adapter.mset([]);
       // pipeline should not be called for empty entries
     });
+
+    it("should cap ttlMs at maxTtlMs in mset pipeline", async () => {
+      const cappedAdapter = new RedisAdapter({
+        client: mockRedis,
+        maxTtlMs: 5000,
+      });
+      const pipe = mockRedis.pipeline();
+      (mockRedis.pipeline as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        pipe,
+      );
+      await cappedAdapter.mset([{ key: "k", value: "v", ttlMs: 60_000 }]);
+      expect(pipe.psetex).toHaveBeenCalledWith("k", 5000, expect.any(String));
+    });
+
+    it("rounds fractional ttlMs up to an integer in mset pipeline", async () => {
+      const pipe = mockRedis.pipeline();
+      (mockRedis.pipeline as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        pipe,
+      );
+      await adapter.mset([{ key: "k", value: "v", ttlMs: 1500.5 }]);
+      expect(pipe.psetex).toHaveBeenCalledWith("k", 1501, expect.any(String));
+    });
   });
 
   describe("mdel", () => {
@@ -327,9 +430,26 @@ describe("RedisAdapter", () => {
   });
 
   describe("flushAll", () => {
-    it("should call FLUSHDB on the redis client", async () => {
-      await adapter.flushAll();
-      expect(mockRedis.flushdb).toHaveBeenCalled();
+    it("should delete only keys under the adapter prefix, never call flushdb", async () => {
+      const prefixed = new RedisAdapter({ client: mockRedis, prefix: "app:" });
+      await prefixed.set("k1", "v1");
+      await mockRedis.set("other:k", "untouched");
+
+      await prefixed.flushAll();
+
+      expect(mockRedis.flushdb).not.toHaveBeenCalled();
+      expect(await prefixed.get("k1")).toBeNull();
+      expect(await mockRedis.get("other:k")).toBe("untouched");
+    });
+  });
+
+  describe("glob escaping", () => {
+    it("escapes glob metacharacters in the prefix for clear()", async () => {
+      const adapter = new RedisAdapter({ client: mockRedis, prefix: "a*b:" });
+      await adapter.set("k", "v");
+      await adapter.clear();
+      const scanCalls = (mockRedis.scan as ReturnType<typeof vi.fn>).mock.calls;
+      expect(scanCalls[0][2]).toBe("a\\*b:*");
     });
   });
 

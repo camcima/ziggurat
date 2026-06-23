@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryAdapter } from "../../src/memory-adapter.js";
 
 describe("MemoryAdapter", () => {
@@ -147,13 +147,25 @@ describe("MemoryAdapter", () => {
       expect(result!.expiresAt!).toBeGreaterThanOrEqual(before + 5000);
     });
 
-    it("should use defaultTtlMs over caller-provided ttlMs", async () => {
+    it("should use caller-provided ttlMs over defaultTtlMs", async () => {
       const a = new MemoryAdapter({ defaultTtlMs: 5000 });
-      const before = Date.now();
-      await a.set("k", "v", 60000);
-      const result = await a.get<string>("k");
-      // Should use adapter's 5000ms, not caller's 60000ms
-      expect(result!.expiresAt!).toBeLessThan(before + 10000);
+      await a.set("k", "v", 60_000);
+      const ttl = await a.getTtl("k");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        expect(ttl.ttlMs).toBeGreaterThan(5000);
+        expect(ttl.ttlMs).toBeLessThanOrEqual(60_000);
+      }
+    });
+
+    it("should cap ttlMs at maxTtlMs", async () => {
+      const a = new MemoryAdapter({ maxTtlMs: 5000 });
+      await a.set("k", "v", 60_000);
+      const ttl = await a.getTtl("k");
+      expect(ttl.kind).toBe("expiring");
+      if (ttl.kind === "expiring") {
+        expect(ttl.ttlMs).toBeLessThanOrEqual(5000);
+      }
     });
 
     it("should expire entries based on defaultTtlMs", async () => {
@@ -169,6 +181,94 @@ describe("MemoryAdapter", () => {
       await a.set("k", "v", 5000);
       const result = await a.get<string>("k");
       expect(result!.expiresAt!).toBeGreaterThanOrEqual(before + 5000);
+    });
+  });
+
+  describe("eviction controls", () => {
+    it("rejects set beyond maxKeys", async () => {
+      const a = new MemoryAdapter({ maxKeys: 2 });
+      await a.set("k1", "v1");
+      await a.set("k2", "v2");
+      await expect(a.set("k3", "v3")).rejects.toThrow();
+    });
+
+    it("allows overwriting an existing key at maxKeys capacity", async () => {
+      const a = new MemoryAdapter({ maxKeys: 2 });
+      await a.set("k1", "v1");
+      await a.set("k2", "v2");
+      await expect(a.set("k1", "v1-updated")).resolves.toBeUndefined();
+      expect((await a.get("k1"))?.value).toBe("v1-updated");
+      await expect(a.set("k3", "v3")).rejects.toThrow();
+    });
+
+    it("evicts expired entries periodically when checkPeriodMs is set", async () => {
+      vi.useFakeTimers();
+      try {
+        const a = new MemoryAdapter({ checkPeriodMs: 1000 });
+        await a.set("k", "v", 500);
+        vi.advanceTimersByTime(2000);
+        // node-cache's internal key count drops once the periodic check runs
+        expect(await a.keys()).toHaveLength(0);
+        a.close();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("close() stops the periodic check timer", () => {
+      const a = new MemoryAdapter({ checkPeriodMs: 1000 });
+      expect(() => a.close()).not.toThrow();
+    });
+  });
+
+  describe("serialization mode", () => {
+    it("json mode returns JSON-round-tripped values (matches Redis/SQLite fidelity)", async () => {
+      const a = new MemoryAdapter({ serialization: "json" });
+      const date = new Date("2026-01-01T00:00:00Z");
+      await a.set("k", { when: date });
+      const entry = await a.get<{ when: unknown }>("k");
+      expect(entry?.value.when).toBe("2026-01-01T00:00:00.000Z");
+    });
+
+    it("json mode prevents cache poisoning via mutation of returned objects", async () => {
+      const a = new MemoryAdapter({ serialization: "json" });
+      await a.set("k", { n: 1 });
+      const first = await a.get<{ n: number }>("k");
+      first!.value.n = 999;
+      const second = await a.get<{ n: number }>("k");
+      expect(second?.value.n).toBe(1);
+    });
+
+    it("json mode round-trips through mset/mget batch operations", async () => {
+      const a = new MemoryAdapter({ serialization: "json" });
+      await a.mset([
+        { key: "k1", value: { n: 1 } },
+        { key: "k2", value: { n: 2 } },
+      ]);
+      const result = await a.mget<{ n: number }>(["k1", "k2"]);
+      expect(result.get("k1")?.value).toEqual({ n: 1 });
+      expect(result.get("k2")?.value).toEqual({ n: 2 });
+      // returned objects are fresh copies (mutation isolation), proving round-trip
+      const k1 = result.get("k1")!;
+      k1.value.n = 999;
+      const again = await a.get<{ n: number }>("k1");
+      expect(again?.value.n).toBe(1);
+    });
+
+    it("json mode does not store undefined (has() consistent with get())", async () => {
+      const a = new MemoryAdapter({ serialization: "json" });
+      await a.set("k", undefined);
+      expect(await a.get("k")).toBeNull();
+      expect(await a.has("k")).toBe(false);
+      expect(await a.keys()).toHaveLength(0);
+    });
+
+    it("reference mode (default) preserves object identity", async () => {
+      const a = new MemoryAdapter();
+      const obj = { n: 1 };
+      await a.set("k", obj);
+      const entry = await a.get<{ n: number }>("k");
+      expect(entry?.value).toBe(obj);
     });
   });
 });

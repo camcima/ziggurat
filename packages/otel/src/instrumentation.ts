@@ -52,12 +52,24 @@ export function instrumentCacheManager(
       unit: "ms",
     },
   );
+  const mgetCounter = meter.createCounter("ziggurat.cache.mget", {
+    description: "Number of cache mget operations",
+  });
+  const msetCounter = meter.createCounter("ziggurat.cache.mset", {
+    description: "Number of cache mset operations",
+  });
+  const mdelCounter = meter.createCounter("ziggurat.cache.mdel", {
+    description: "Number of cache mdel operations",
+  });
 
   const unsubscribers: Array<() => void> = [];
 
   unsubscribers.push(
     cacheManager.on("hit", (e) => {
-      hitCounter.add(1, { "cache.layer": e.layerName });
+      hitCounter.add(1, {
+        "cache.layer": e.layerName,
+        "cache.operation": "get",
+      });
       durationHistogram.record(e.durationMs, {
         "cache.operation": "get",
         "cache.layer": e.layerName,
@@ -67,7 +79,7 @@ export function instrumentCacheManager(
 
   unsubscribers.push(
     cacheManager.on("miss", (e) => {
-      missCounter.add(1);
+      missCounter.add(1, { "cache.operation": "get" });
       durationHistogram.record(e.durationMs, { "cache.operation": "get" });
     }),
   );
@@ -121,6 +133,33 @@ export function instrumentCacheManager(
   unsubscribers.push(
     cacheManager.on("wrap:coalesce", () => {
       wrapCoalesceCounter.add(1);
+    }),
+  );
+
+  unsubscribers.push(
+    cacheManager.on("mget", (e) => {
+      mgetCounter.add(1);
+      if (e.hitCount > 0) {
+        hitCounter.add(e.hitCount, { "cache.operation": "mget" });
+      }
+      if (e.missCount > 0) {
+        missCounter.add(e.missCount, { "cache.operation": "mget" });
+      }
+      durationHistogram.record(e.durationMs, { "cache.operation": "mget" });
+    }),
+  );
+
+  unsubscribers.push(
+    cacheManager.on("mset", (e) => {
+      msetCounter.add(1);
+      durationHistogram.record(e.durationMs, { "cache.operation": "mset" });
+    }),
+  );
+
+  unsubscribers.push(
+    cacheManager.on("mdel", (e) => {
+      mdelCounter.add(1);
+      durationHistogram.record(e.durationMs, { "cache.operation": "mdel" });
     }),
   );
 

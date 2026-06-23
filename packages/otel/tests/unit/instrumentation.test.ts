@@ -67,7 +67,11 @@ describe("instrumentCacheManager", () => {
     const hitMetric = findMetric(collected, "ziggurat.cache.hit");
     expect(hitMetric).toBeDefined();
     expect(hitMetric!.dataPoints.length).toBeGreaterThan(0);
-    expect(hitMetric!.dataPoints[0].value).toBe(1);
+    const getHitPoint = hitMetric!.dataPoints.find(
+      (dp) => dp.attributes["cache.operation"] === "get",
+    );
+    expect(getHitPoint).toBeDefined();
+    expect(getHitPoint!.value).toBe(1);
 
     cleanup();
   });
@@ -264,6 +268,110 @@ describe("instrumentCacheManager", () => {
     // Verify metrics are recorded under the custom meter
     const hitMetric = findMetric(collected, "ziggurat.cache.hit");
     expect(hitMetric).toBeDefined();
+
+    cleanup();
+  });
+
+  it("should record mget operation count and accumulate hit/miss as values", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager);
+
+    await manager.set("k1", "v1");
+    await manager.mget(["k1", "k2"]); // 1 hit, 1 miss
+
+    const collected = await collectMetrics();
+    const mgetMetric = findMetric(collected, "ziggurat.cache.mget");
+    expect(mgetMetric).toBeDefined();
+    expect(mgetMetric!.dataPoints[0].value).toBe(1);
+
+    // hit/miss recorded as measurement VALUES (not high-cardinality labels)
+    const hitMetric = findMetric(collected, "ziggurat.cache.hit");
+    const mgetHitPoint = hitMetric!.dataPoints.find(
+      (dp) => dp.attributes["cache.operation"] === "mget",
+    );
+    expect(mgetHitPoint?.value).toBe(1);
+    const missMetric = findMetric(collected, "ziggurat.cache.miss");
+    const mgetMissPoint = missMetric!.dataPoints.find(
+      (dp) => dp.attributes["cache.operation"] === "mget",
+    );
+    expect(mgetMissPoint?.value).toBe(1);
+
+    cleanup();
+  });
+
+  it("should record mset and mdel operation counts", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager);
+
+    await manager.mset([{ key: "k1", value: "v1" }]);
+    await manager.mdel(["k1"]);
+
+    const collected = await collectMetrics();
+    const msetMetric = findMetric(collected, "ziggurat.cache.mset");
+    const mdelMetric = findMetric(collected, "ziggurat.cache.mdel");
+    expect(msetMetric!.dataPoints[0].value).toBe(1);
+    expect(mdelMetric!.dataPoints[0].value).toBe(1);
+
+    cleanup();
+  });
+
+  it("should record wrap coalesce counter for concurrent wraps", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager);
+
+    const factory = async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      return "v";
+    };
+    await Promise.all([manager.wrap("k", factory), manager.wrap("k", factory)]);
+
+    const collected = await collectMetrics();
+    const coalesceMetric = findMetric(
+      collected,
+      "ziggurat.cache.wrap.coalesce",
+    );
+    expect(coalesceMetric).toBeDefined();
+    expect(coalesceMetric!.dataPoints[0].value).toBe(1);
+
+    cleanup();
+  });
+
+  it("should use a custom meter name when provided", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager, {
+      meterName: "custom-meter",
+    });
+
+    await manager.set("k", "v");
+    await manager.get("k");
+
+    const collected = await collectMetrics();
+    expect(findMetric(collected, "ziggurat.cache.hit")).toBeDefined();
+
+    cleanup();
+  });
+
+  it("should not record miss values for an all-hit mget (and vice versa)", async () => {
+    const adapter = new MemoryAdapter();
+    const manager = new CacheManager({ layers: [adapter] });
+    const cleanup = instrumentCacheManager(manager);
+
+    await manager.set("k1", "v1");
+    await manager.mget(["k1"]); // all-hit: missCount === 0 branch
+    await manager.mget(["absent"]); // all-miss: hitCount === 0 branch
+
+    const collected = await collectMetrics();
+    const missMetric = findMetric(collected, "ziggurat.cache.miss");
+    const mgetMissPoints = missMetric!.dataPoints.filter(
+      (dp) => dp.attributes["cache.operation"] === "mget",
+    );
+    // only the all-miss mget contributed a miss value
+    expect(mgetMissPoints).toHaveLength(1);
+    expect(mgetMissPoints[0].value).toBe(1);
 
     cleanup();
   });

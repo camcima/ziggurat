@@ -5,23 +5,36 @@ import { BaseCacheAdapter } from "./base-cache-adapter.js";
 export class MemoryAdapter extends BaseCacheAdapter {
   readonly name = "memory";
   private readonly cache: NodeCache;
-  private readonly defaultTtlMs?: number;
+  private readonly serialization: "reference" | "json";
+  private readonly maxKeys?: number;
 
   constructor(options: MemoryAdapterOptions = {}) {
-    super();
-    this.defaultTtlMs = options.defaultTtlMs;
+    super(options);
+    this.serialization = options.serialization ?? "reference";
+    this.maxKeys = options.maxKeys;
     this.cache = new NodeCache({
       stdTTL: 0,
-      checkperiod: 0,
+      checkperiod:
+        options.checkPeriodMs !== undefined ? options.checkPeriodMs / 1000 : 0,
       useClones: false,
+      maxKeys: options.maxKeys ?? -1,
     });
+  }
+
+  /** Stop the periodic expiry-check timer (no-op when checkPeriodMs is unset). */
+  close(): void {
+    this.cache.close();
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async get<T>(key: string): Promise<CacheEntry<T> | null> {
-    const value = this.cache.get<T>(key);
-    if (value === undefined) return null;
+    const raw = this.cache.get<unknown>(key);
+    if (raw === undefined) return null;
 
+    const value =
+      this.serialization === "json"
+        ? (JSON.parse(raw as string) as T)
+        : (raw as T);
     const ttl = this.cache.getTtl(key);
     return {
       value,
@@ -31,13 +44,23 @@ export class MemoryAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/require-await
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    const effectiveTtl = this.defaultTtlMs ?? ttlMs;
+    const effectiveTtl = this.resolveTtl(ttlMs);
+    // ttlMs <= 0 means already expired — don't store
+    if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
+    const stored =
+      this.serialization === "json" ? JSON.stringify(value) : value;
+    // JSON mode cannot represent undefined — skip the write entirely so
+    // has()/keys() stay consistent with get() reporting a miss.
+    if (this.serialization === "json" && stored === undefined) return;
+    // node-cache rejects ANY set at capacity, even overwrites of existing
+    // keys; delete first so existing keys can always be refreshed.
+    if (this.maxKeys !== undefined && this.cache.has(key)) {
+      this.cache.del(key);
+    }
     if (effectiveTtl !== undefined) {
-      // ttlMs <= 0 means already expired — don't store
-      if (effectiveTtl <= 0) return;
-      this.cache.set(key, value, effectiveTtl / 1000);
+      this.cache.set(key, stored, effectiveTtl / 1000);
     } else {
-      this.cache.set(key, value, 0);
+      this.cache.set(key, stored, 0);
     }
   }
 

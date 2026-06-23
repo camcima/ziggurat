@@ -1,24 +1,25 @@
-import type { CacheEntry } from "@ziggurat-cache/core";
+import type { AdapterTtlOptions, CacheEntry } from "@ziggurat-cache/core";
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
 import type { Client } from "memjs";
 
-export interface MemcacheAdapterOptions {
+export interface MemcacheAdapterOptions extends AdapterTtlOptions {
   client: Client;
   prefix?: string;
-  defaultTtlMs?: number;
 }
+
+// Memcached interprets relative `expires` values above 30 days as an
+// absolute unix timestamp, so larger TTLs must be sent as one.
+const MEMCACHE_MAX_RELATIVE_EXPIRES_SEC = 60 * 60 * 24 * 30;
 
 export class MemcacheAdapter extends BaseCacheAdapter {
   readonly name = "memcache";
   private readonly client: Client;
   private readonly prefix: string;
-  private readonly defaultTtlMs?: number;
 
   constructor(options: MemcacheAdapterOptions) {
-    super();
+    super(options);
     this.client = options.client;
     this.prefix = options.prefix ?? "";
-    this.defaultTtlMs = options.defaultTtlMs;
   }
 
   private prefixedKey(key: string): string {
@@ -29,7 +30,15 @@ export class MemcacheAdapter extends BaseCacheAdapter {
     const result = await this.client.get(this.prefixedKey(key));
     if (result.value === null) return null;
 
-    const entry = JSON.parse(result.value.toString()) as CacheEntry<T>;
+    let entry: CacheEntry<T>;
+    try {
+      entry = JSON.parse(result.value.toString()) as CacheEntry<T>;
+    } catch {
+      // Corrupt/legacy payload — delete and treat as a miss
+      await this.client.delete(this.prefixedKey(key));
+      return null;
+    }
+
     if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
       await this.client.delete(this.prefixedKey(key));
       return null;
@@ -40,7 +49,7 @@ export class MemcacheAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
-    const effectiveTtl = this.defaultTtlMs ?? ttlMs;
+    const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
     const expiresAt =
@@ -48,9 +57,15 @@ export class MemcacheAdapter extends BaseCacheAdapter {
     const serialized = JSON.stringify({ value, expiresAt });
     const prefixed = this.prefixedKey(key);
 
-    // Memcached TTL is in seconds; 0 means no expiration
-    const expiresSec =
-      effectiveTtl !== undefined ? Math.ceil(effectiveTtl / 1000) : 0;
+    // Memcached TTL is in seconds; 0 means no expiration.
+    let expiresSec = 0;
+    if (effectiveTtl !== undefined) {
+      expiresSec = Math.ceil(effectiveTtl / 1000);
+      if (expiresSec > MEMCACHE_MAX_RELATIVE_EXPIRES_SEC) {
+        // Send as an absolute unix timestamp (seconds) for >30-day TTLs.
+        expiresSec = Math.ceil((Date.now() + effectiveTtl) / 1000);
+      }
+    }
     await this.client.set(prefixed, serialized, { expires: expiresSec });
   }
 

@@ -29,17 +29,22 @@ const cache = new CacheManager({
 
 ## Configuration
 
-| Property       | Type           | Default      | Description                                                                     |
-| -------------- | -------------- | ------------ | ------------------------------------------------------------------------------- |
-| `client`       | `memjs.Client` | _(required)_ | A configured memjs client instance.                                             |
-| `prefix`       | `string`       | `""`         | Key prefix for infrastructure-level isolation.                                  |
-| `defaultTtlMs` | `number`       | _none_       | Default TTL in milliseconds. Takes precedence over TTL passed via `set`/`wrap`. |
+| Property       | Type           | Default      | Description                                                                                                                                    |
+| -------------- | -------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client`       | `memjs.Client` | _(required)_ | A configured memjs client instance.                                                                                                            |
+| `prefix`       | `string`       | `""`         | Key prefix for infrastructure-level isolation.                                                                                                 |
+| `defaultTtlMs` | `number`       | _none_       | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
+| `maxTtlMs`     | `number`       | _none_       | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
+
+> **Warning:** memcached has no way to enumerate or delete keys by prefix, so `clear()` and `flushAll()` both call `flush` — wiping **the entire memcached server**, including keys written by other applications and other `MemcacheAdapter` prefixes. Avoid calling them in shared environments.
 
 ## TTL Handling
 
 Memcached uses TTLs in **seconds**. The adapter automatically converts from milliseconds, rounding up with `Math.ceil`. A TTL of 0 (or omitted) means no expiration until evicted by memory pressure.
 
 Maximum Memcached TTL is 30 days (2,592,000 seconds). Values larger than this are treated as Unix timestamps by the Memcached server.
+
+TTLs longer than 30 days are automatically sent to memcached as an absolute expiry timestamp (memcached interprets large relative values as timestamps), so long TTLs behave correctly.
 
 ## Serialization
 

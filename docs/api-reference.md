@@ -18,13 +18,14 @@ new CacheManager(options: CacheManagerOptions)
 
 **`CacheManagerOptions`**:
 
-| Property       | Type                               | Default              | Description                                                                              |
-| -------------- | ---------------------------------- | -------------------- | ---------------------------------------------------------------------------------------- |
-| `layers`       | `CacheAdapter[]`                   | _(required)_         | Ordered array of cache layers. L1 is index 0 (fastest).                                  |
-| `namespace`    | `string`                           | _none_               | Prefix prepended to all keys as `namespace:key`. Useful for logical grouping.            |
-| `syncBackfill` | `boolean`                          | `false`              | When `true`, waits for backfill to complete before returning.                            |
-| `stampede`     | `StampedeConfig`                   | `{ coalesce: true }` | Stampede protection configuration.                                                       |
-| `events`       | `TypedEventEmitter<CacheEventMap>` | _(auto-created)_     | Optional shared event emitter for observability. If omitted, an internal one is created. |
+| Property       | Type                               | Default              | Description                                                                                                                           |
+| -------------- | ---------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `layers`       | `CacheAdapter[]`                   | _(required)_         | Ordered array of cache layers. L1 is index 0 (fastest). Must contain at least one adapter — the constructor throws on an empty array. |
+| `namespace`    | `string`                           | _none_               | Prefix prepended to all keys as `namespace:key`. Useful for logical grouping.                                                         |
+| `syncBackfill` | `boolean`                          | `false`              | When `true`, waits for backfill to complete before returning.                                                                         |
+| `strictWrites` | `boolean`                          | `false`              | When `true`, `set`/`mset`/`delete`/`mdel` throw an `AggregateError` if **every** layer fails the write. `wrap()` is unaffected.       |
+| `stampede`     | `StampedeConfig`                   | `{ coalesce: true }` | Stampede protection configuration.                                                                                                    |
+| `events`       | `TypedEventEmitter<CacheEventMap>` | _(auto-created)_     | Optional shared event emitter for observability. If omitted, an internal one is created.                                              |
 
 **`StampedeConfig`**:
 
@@ -250,9 +251,13 @@ new MemoryAdapter(options?: MemoryAdapterOptions)
 
 **`MemoryAdapterOptions`**:
 
-| Property       | Type     | Default | Description                                                                                            |
-| -------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------ |
-| `defaultTtlMs` | `number` | _none_  | Default TTL in milliseconds applied to all entries. Takes precedence over TTL passed via `set`/`wrap`. |
+| Property        | Type                    | Default           | Description                                                                                                                                    |
+| --------------- | ----------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defaultTtlMs`  | `number`                | _none_            | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
+| `maxTtlMs`      | `number`                | _none_            | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
+| `checkPeriodMs` | `number`                | _none_ (disabled) | Interval for proactive eviction of expired entries. Without it, expired entries are removed only on access. Prefer >= 1000.                    |
+| `maxKeys`       | `number`                | _unlimited_       | Maximum number of keys; `set()` throws once exceeded (overwriting an existing key still succeeds at capacity).                                 |
+| `serialization` | `"reference" \| "json"` | `"reference"`     | `"reference"` stores live object references (fastest); `"json"` JSON round-trips for cross-layer fidelity and mutation safety.                 |
 
 ```ts
 // Unbounded, no default TTL
@@ -274,6 +279,7 @@ Implements the full `CacheAdapter` interface including `has`, `getTtl`, `keys`, 
 
 - Expired entries (past their TTL) are lazily cleaned up on `get`.
 - Overrides `has`, `getTtl`, `keys`, and `flushAll` using native `node-cache` methods for better performance.
+- `close()` — Stops the periodic eviction timer; call on shutdown when `checkPeriodMs` is set.
 
 ---
 
@@ -333,11 +339,12 @@ new RedisAdapter(options: RedisAdapterOptions)
 
 **`RedisAdapterOptions`**:
 
-| Property       | Type              | Default      | Description                                                                                            |
-| -------------- | ----------------- | ------------ | ------------------------------------------------------------------------------------------------------ |
-| `client`       | `Redis` (ioredis) | _(required)_ | A configured ioredis client instance.                                                                  |
-| `prefix`       | `string`          | `""`         | Key prefix for infrastructure-level isolation. All keys are stored as `prefix + key`.                  |
-| `defaultTtlMs` | `number`          | _none_       | Default TTL in milliseconds applied to all entries. Takes precedence over TTL passed via `set`/`wrap`. |
+| Property       | Type              | Default      | Description                                                                                                                                    |
+| -------------- | ----------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client`       | `Redis` (ioredis) | _(required)_ | A configured ioredis client instance.                                                                                                          |
+| `prefix`       | `string`          | `""`         | Key prefix for infrastructure-level isolation. All keys are stored as `prefix + key`.                                                          |
+| `defaultTtlMs` | `number`          | _none_       | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
+| `maxTtlMs`     | `number`          | _none_       | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
 
 ```ts
 import Redis from "ioredis";
@@ -520,10 +527,13 @@ Returns a cleanup function that unsubscribes all listeners.
 
 | Metric Name                    | Attributes                       | Description                              |
 | ------------------------------ | -------------------------------- | ---------------------------------------- |
-| `ziggurat.cache.hit`           | `cache.layer`                    | Cache hits                               |
-| `ziggurat.cache.miss`          |                                  | Cache misses                             |
+| `ziggurat.cache.hit`           | `cache.layer`, `cache.operation` | Cache hits                               |
+| `ziggurat.cache.miss`          | `cache.operation`                | Cache misses                             |
 | `ziggurat.cache.set`           |                                  | Set operations                           |
 | `ziggurat.cache.delete`        |                                  | Delete operations                        |
+| `ziggurat.cache.mget`          |                                  | Number of cache mget operations          |
+| `ziggurat.cache.mset`          |                                  | Number of cache mset operations          |
+| `ziggurat.cache.mdel`          |                                  | Number of cache mdel operations          |
 | `ziggurat.cache.error`         | `cache.layer`, `cache.operation` | Layer errors                             |
 | `ziggurat.cache.backfill`      | `cache.source_layer`             | Backfill events                          |
 | `ziggurat.cache.wrap.hit`      |                                  | Wrap cache hits                          |

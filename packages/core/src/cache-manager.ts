@@ -16,16 +16,20 @@ export class CacheManager {
   private readonly namespace?: string;
   private readonly stampedeConfig: Required<StampedeConfig>;
   private readonly syncBackfill: boolean;
+  private readonly strictWrites: boolean;
   private readonly inFlightFetches = new Map<string, Promise<unknown>>();
   private readonly events: TypedEventEmitter<CacheEventMap>;
 
   constructor(options: CacheManagerOptions) {
-    this.layers = options.layers;
+    if (options.layers.length === 0) {
+      throw new Error("CacheManager requires at least one layer");
+    }
+    this.layers = [...options.layers];
     this.namespace = options.namespace;
     this.syncBackfill = options.syncBackfill ?? false;
+    this.strictWrites = options.strictWrites ?? false;
     this.stampedeConfig = {
-      coalesce: true,
-      ...options.stampede,
+      coalesce: options.stampede?.coalesce ?? true,
     };
     this.events = options.events ?? new TypedEventEmitter<CacheEventMap>();
   }
@@ -88,11 +92,14 @@ export class CacheManager {
             entry.expiresAt !== null
               ? Math.max(0, entry.expiresAt - Date.now())
               : undefined;
+          // backfillLayers === this.layers.slice(0, i), so results[] indices align with emitWriteErrors' this.layers[] indexing
           const backfillPromise = Promise.allSettled(
             backfillLayers.map((layer) =>
               layer.set(nsKey, entry.value, remainingTtlMs),
             ),
-          );
+          ).then((results) => {
+            this.emitWriteErrors(results, key, "backfill");
+          });
           if (shouldEmit) {
             this.events.emit("backfill", {
               key,
@@ -121,16 +128,18 @@ export class CacheManager {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
-  async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
+  private async setLayers<T>(
+    key: string,
+    value: T,
+    ttlMs?: number,
+  ): Promise<PromiseSettledResult<void>[]> {
     const nsKey = this.namespacedKey(key);
     const shouldEmit =
       this.events.hasListeners("set") || this.events.hasListeners("error");
     const start = shouldEmit ? performance.now() : 0;
-
     const results = await Promise.allSettled(
       this.layers.map((layer) => layer.set(nsKey, value, ttlMs)),
     );
-
     if (shouldEmit) {
       this.emitWriteErrors(results, key, "set");
       this.events.emit("set", {
@@ -140,6 +149,13 @@ export class CacheManager {
         durationMs: performance.now() - start,
       });
     }
+    return results;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
+  async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
+    const results = await this.setLayers(key, value, ttlMs);
+    this.assertWritesSucceeded(results, "set");
   }
 
   async delete(key: string): Promise<void> {
@@ -160,8 +176,14 @@ export class CacheManager {
         durationMs: performance.now() - start,
       });
     }
+    this.assertWritesSucceeded(results, "delete");
   }
 
+  /**
+   * Returns the cached value for `key`, or calls `factory` to compute it.
+   * The computed value is always returned even if caching it fails — write
+   * errors surface via "error" events regardless of `strictWrites`.
+   */
   async wrap<T>(
     key: string,
     factory: () => Promise<T>,
@@ -208,7 +230,7 @@ export class CacheManager {
             factoryDurationMs,
           });
         }
-        await this.set(key, value, ttlMs);
+        await this.setLayers(key, value, ttlMs);
         return value;
       } finally {
         if (this.stampedeConfig.coalesce) {
@@ -287,9 +309,15 @@ export class CacheManager {
               ? Math.max(0, entry.expiresAt - Date.now())
               : undefined,
         }));
+        const backfillKeys = foundInThisLayer
+          .map(({ nsKey }) => keyMap.get(nsKey))
+          .filter((k): k is string => k !== undefined);
+        // backfillLayers === this.layers.slice(0, i), so results[] indices align with emitWriteErrors' this.layers[] indexing
         const backfillPromise = Promise.allSettled(
           backfillLayers.map((layer) => layer.mset(backfillEntries)),
-        );
+        ).then((results) => {
+          this.emitWriteErrors(results, backfillKeys.join(","), "backfill");
+        });
         if (shouldEmit) {
           for (const { nsKey } of foundInThisLayer) {
             const originalKey = keyMap.get(nsKey);
@@ -350,6 +378,7 @@ export class CacheManager {
         durationMs: performance.now() - start,
       });
     }
+    this.assertWritesSucceeded(results, "mset");
   }
 
   async mdel(keys: readonly string[]): Promise<void> {
@@ -371,6 +400,7 @@ export class CacheManager {
         durationMs: performance.now() - start,
       });
     }
+    this.assertWritesSucceeded(results, "mdel");
   }
 
   async getTtl(key: string): Promise<TtlResult> {
@@ -417,6 +447,25 @@ export class CacheManager {
           error: r.reason,
         });
       }
+    }
+  }
+
+  // Intentionally unconditional — throws regardless of whether an "error" listener
+  // is registered. That is the point of strictWrites; contrast with emitWriteErrors,
+  // which is a no-op when there are no listeners.
+  private assertWritesSucceeded(
+    results: PromiseSettledResult<void>[],
+    operation: CacheErrorEvent["operation"],
+  ): void {
+    if (!this.strictWrites || results.length === 0) return;
+    const failures = results.filter(
+      (r): r is PromiseRejectedResult => r.status === "rejected",
+    );
+    if (failures.length === results.length) {
+      throw new AggregateError(
+        failures.map((f) => f.reason as unknown),
+        `All ${String(results.length)} cache layer(s) failed during ${operation}`,
+      );
     }
   }
 

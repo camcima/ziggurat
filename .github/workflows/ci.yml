@@ -32,6 +32,9 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # mint an OIDC token for tokenless Codecov upload
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -44,14 +47,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test:coverage
-      # Dependabot-triggered runs don't receive repository secrets, so
-      # CODECOV_TOKEN is empty and the upload fails (fatal via fail_ci_if_error).
-      # Skip the upload on those runs; coverage still uploads on normal
-      # pushes/PRs and on main, where the token is available.
+      # Tokenless upload via OIDC: codecov-action mints a GitHub id-token instead
+      # of using CODECOV_TOKEN, so it works on Dependabot PRs (which don't get
+      # repo secrets) without skipping coverage. Needs id-token: write (above).
+      # Non-fork runs use OIDC; fork PRs fall back to Codecov's tokenless path.
       - uses: codecov/codecov-action@v6
-        if: ${{ github.actor != 'dependabot[bot]' }}
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           files: packages/core/coverage/coverage-final.json,packages/redis/coverage/coverage-final.json,packages/memcache/coverage/coverage-final.json,packages/sqlite/coverage/coverage-final.json,packages/nestjs/coverage/coverage-final.json
           flags: unit
           fail_ci_if_error: true

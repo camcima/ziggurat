@@ -58,7 +58,7 @@
   },
   "devDependencies": {
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/sdk-metrics": "^2.7.1",
+    "@opentelemetry/sdk-metrics": "^2.8.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"

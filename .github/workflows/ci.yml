@@ -16,7 +16,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: 9.15.0
@@ -36,7 +36,7 @@ jobs:
       contents: read
       id-token: write # mint an OIDC token for tokenless Codecov upload
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: 9.15.0
@@ -90,7 +90,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: 9.15.0
@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     name: functional (sqlite)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
         with:
           version: 9.15.0
@@ -127,7 +127,7 @@ jobs:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
@@ -138,7 +138,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
@@ -153,5 +153,5 @@ jobs:
     container:
       image: semgrep/semgrep
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - run: semgrep scan --config auto --error .

@@ -108,8 +108,7 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   // eslint-disable-next-line @typescript-eslint/require-await
   async get<T>(key: string): Promise<CacheEntry<T> | null> {
     const row = this.stmtGet.get(this.namespace, key) as
-      | { value: string; expires_at: number | null }
-      | undefined;
+      { value: string; expires_at: number | null } | undefined;
     if (!row) return null;
 
     if (row.expires_at !== null && Date.now() >= row.expires_at) {
@@ -158,8 +157,7 @@ export class SQLiteAdapter extends BaseCacheAdapter {
   // eslint-disable-next-line @typescript-eslint/require-await
   async getTtl(key: string): Promise<TtlResult> {
     const row = this.stmtGetTtl.get(this.namespace, key) as
-      | { expires_at: number | null }
-      | undefined;
+      { expires_at: number | null } | undefined;
     if (!row) return { kind: "missing" };
 
     if (row.expires_at === null) return { kind: "permanent" };

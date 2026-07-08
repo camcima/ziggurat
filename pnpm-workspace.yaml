@@ -1,8 +1,8 @@
 packages:
   - "packages/*"
 
-# Moved from package.json "pnpm.overrides": pnpm 10+ reads settings from here,
-# not from the package.json "pnpm" field.
+# Moved here from package.json's "pnpm.overrides": pnpm 11 no longer reads the
+# package.json "pnpm" field, so overrides must live in pnpm-workspace.yaml.
 overrides:
   "js-yaml@4": "^4.2.0"
 

@@ -55,9 +55,9 @@
     "ioredis": "^5.0.0"
   },
   "devDependencies": {
-    "ioredis": "^5.11.0",
+    "ioredis": "^5.11.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.9"
   }
 }

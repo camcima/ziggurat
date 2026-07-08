@@ -1,2 +1,33 @@
 packages:
   - "packages/*"
+
+# Moved from package.json "pnpm.overrides": pnpm 10+ reads settings from here,
+# not from the package.json "pnpm" field.
+overrides:
+  "js-yaml@4": "^4.2.0"
+
+# Supply-chain hardening (requires pnpm >= 10.26; see pnpm.io/settings).
+# Wait 7 days (10080 minutes) before installing newly published versions,
+# so a compromised release has time to be caught and yanked.
+minimumReleaseAge: 10080
+# Refuse transitive dependencies resolved from non-registry (git/http/tarball) sources.
+blockExoticSubdeps: true
+# Prevent a malicious update from downgrading these security settings.
+trustPolicy: no-downgrade
+# Accepted exceptions to no-downgrade. All three are dev/build-time tooling that
+# is NOT shipped in the published packages; each dropped the npm provenance that
+# earlier versions carried (upstream publish-flow change, reviewed and accepted).
+# Any *other* package that downgrades trust is still blocked.
+trustPolicyExclude:
+  - release-it-pnpm
+  - chokidar
+  - ast-v8-to-istanbul
+
+# pnpm 11 blocks dependency build (lifecycle) scripts unless explicitly allowed
+# here (allowBuilds replaces v10's onlyBuiltDependencies). Each entry is a
+# reviewed decision on whether that package may run install scripts.
+allowBuilds:
+  "@nestjs/core": false # only an OpenCollective funding-message postinstall; not needed to build or test
+  better-sqlite3: true # native module; must compile for the sqlite backend + its functional tests
+  esbuild: true # installs its platform binary; required by vite / tsup / vitest
+  lefthook: false # local git-hooks tool, never invoked during install or CI

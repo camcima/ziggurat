@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    # Wait 7 days after a release before opening an update PR, matching the
+    # pnpm minimumReleaseAge cooldown, so freshly published (possibly
+    # compromised) versions have time to be caught before we pull them in.
+    cooldown:
+      default-days: 7
     groups:
       dev-dependencies:
         dependency-type: development
@@ -16,3 +21,5 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7

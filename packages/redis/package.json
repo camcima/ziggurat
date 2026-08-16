@@ -52,7 +52,7 @@
     "@ziggurat-cache/core": "workspace:*"
   },
   "peerDependencies": {
-    "ioredis": "^5.0.0"
+    "ioredis": "^5.0.0 || ^6.0.0"
   },
   "devDependencies": {
     "ioredis": "^6.0.0",

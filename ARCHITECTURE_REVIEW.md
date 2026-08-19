@@ -6,7 +6,9 @@
 **Method:** Every source file read in full. Full build + test suite executed: **12/12 turbo tasks pass** (unit, contract, and integration suites). Claims below that depend on tooling behavior (e.g. Vitest 4) were verified against the installed dependencies, not assumed.
 **Relation to prior review:** `CODE_REVIEW.md` (2026-06-11, v0.1.x) — nearly all of its findings are fixed in the current code. A status appendix is at the end. This document reviews the codebase as it stands at v0.2.0.
 
-> **Resolution status:** H1–H3, M1–M6, and L1–L6 were fixed in the follow-up branch `fix/architecture-review-findings`; the findings below are preserved as written at review time. Still open: **L7** (publishing the adapter contract suite as a test kit) and **L8** (API/perf polish), plus the five architectural observations, which are roadmap items rather than defects.
+> **Resolution status:** H1–H3, M1–M6, and L1–L6 were fixed in [#56](https://github.com/camcima/ziggurat/pull/56); the findings below are preserved as written at review time.
+>
+> Everything left open is tracked: **L7** → [#58](https://github.com/camcima/ziggurat/issues/58) (adapter test kit), **L8** → [#59](https://github.com/camcima/ziggurat/issues/59) (1.0 API polish), and three of the architectural observations → [#60](https://github.com/camcima/ziggurat/issues/60) (lifecycle contract), [#61](https://github.com/camcima/ziggurat/issues/61) (NestJS named caches), [#62](https://github.com/camcima/ziggurat/issues/62) (cross-process stampede protection). The other two observations need no tracker: `getTtl()`'s first-layer-wins behavior is now documented in the API reference, and the envelope-expiry duplication was largely resolved when #56 made that check advisory rather than load-bearing.
 
 ---
 

@@ -34,13 +34,17 @@ export class MemcacheAdapter extends BaseCacheAdapter {
     try {
       entry = JSON.parse(result.value.toString()) as CacheEntry<T>;
     } catch {
-      // Corrupt/legacy payload — delete and treat as a miss
-      await this.client.delete(this.prefixedKey(key));
+      // Corrupt/legacy payload — treat as a miss. Reads never delete: a
+      // read-then-delete would race a concurrent writer refreshing the key,
+      // and with an empty prefix it would reach keys this adapter does not
+      // own. The next set() overwrites the bad payload anyway.
       return null;
     }
 
+    // Memcached enforces the real expiry itself; this envelope check is a
+    // clock-skew backstop only, so it reports a miss without deleting — a
+    // reader with a fast clock must not evict entries other nodes still see.
     if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
-      await this.client.delete(this.prefixedKey(key));
       return null;
     }
 
@@ -49,6 +53,9 @@ export class MemcacheAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
+    // undefined is never stored — JSON cannot round-trip it, and storing the
+    // envelope without a value would read back as a hit carrying undefined.
+    if (value === undefined) return;
     const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;

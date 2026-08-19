@@ -9,17 +9,26 @@ import type { Redis } from "ioredis";
 export interface RedisAdapterOptions extends AdapterTtlOptions {
   client: Redis;
   prefix?: string;
+  /**
+   * Permit clear()/flushAll() when no `prefix` is configured. Without a
+   * prefix those methods match every key in the database — including keys
+   * written by other applications — so they refuse to run unless you opt in
+   * here. Reads, writes, and deletes of individual keys are unaffected.
+   */
+  allowUnprefixedClear?: boolean;
 }
 
 export class RedisAdapter extends BaseCacheAdapter {
   readonly name = "redis";
   private readonly client: Redis;
   private readonly prefix: string;
+  private readonly allowUnprefixedClear: boolean;
 
   constructor(options: RedisAdapterOptions) {
     super(options);
     this.client = options.client;
     this.prefix = options.prefix ?? "";
+    this.allowUnprefixedClear = options.allowUnprefixedClear ?? false;
   }
 
   private prefixedKey(key: string): string {
@@ -34,13 +43,17 @@ export class RedisAdapter extends BaseCacheAdapter {
     try {
       entry = JSON.parse(raw) as CacheEntry<T>;
     } catch {
-      // Corrupt/legacy payload — delete and treat as a miss
-      await this.client.del(this.prefixedKey(key));
+      // Corrupt/legacy payload — treat as a miss. Reads never delete: a
+      // read-then-delete would race a concurrent writer refreshing the key,
+      // and with an empty prefix it would reach keys this adapter does not
+      // own. The next set() overwrites the bad payload anyway.
       return null;
     }
 
+    // Redis enforces the real expiry via PSETEX; this envelope check is a
+    // clock-skew backstop only, so it reports a miss without deleting — a
+    // reader with a fast clock must not evict entries other nodes still see.
     if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
-      await this.client.del(this.prefixedKey(key));
       return null;
     }
 
@@ -49,6 +62,9 @@ export class RedisAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
+    // undefined is never stored — JSON cannot round-trip it, and storing the
+    // envelope without a value would read back as a hit carrying undefined.
+    if (value === undefined) return;
     const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
@@ -71,6 +87,20 @@ export class RedisAdapter extends BaseCacheAdapter {
 
   private static escapeGlob(literal: string): string {
     return literal.replace(/[\\*?[\]]/g, "\\$&");
+  }
+
+  /**
+   * clear()/flushAll() delete every key matching `prefix + "*"`. With an
+   * empty prefix that is the entire database, so refuse unless the caller
+   * explicitly opted in via `allowUnprefixedClear`.
+   */
+  private assertClearIsScoped(): void {
+    if (this.prefix === "" && !this.allowUnprefixedClear) {
+      throw new Error(
+        "RedisAdapter.clear()/flushAll() would delete every key in the database because no prefix is configured. " +
+          "Set a `prefix`, or pass `allowUnprefixedClear: true` if wiping the whole database is intended.",
+      );
+    }
   }
 
   private async scanKeys(pattern: string): Promise<string[]> {
@@ -106,6 +136,7 @@ export class RedisAdapter extends BaseCacheAdapter {
   }
 
   async clear(): Promise<void> {
+    this.assertClearIsScoped();
     const pattern = RedisAdapter.escapeGlob(this.prefix) + "*";
     const keys = await this.scanKeys(pattern);
     if (keys.length > 0) {
@@ -137,8 +168,6 @@ export class RedisAdapter extends BaseCacheAdapter {
 
     if (!results) return map;
 
-    const corruptKeys: string[] = [];
-
     for (let i = 0; i < keys.length; i++) {
       const [err, raw] = results[i] as [Error | null, string | null];
       if (err || raw === null) continue;
@@ -147,18 +176,13 @@ export class RedisAdapter extends BaseCacheAdapter {
       try {
         entry = JSON.parse(raw) as CacheEntry<T>;
       } catch {
-        // Corrupt/legacy payload — treat as a miss and schedule cleanup
-        corruptKeys.push(prefixedKeys[i]);
+        // Corrupt/legacy payload — a miss, deleted by nobody. See get().
         continue;
       }
       if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
         continue;
       }
       map.set(keys[i], entry);
-    }
-
-    if (corruptKeys.length > 0) {
-      await this.client.del(...corruptKeys);
     }
 
     return map;
@@ -170,6 +194,8 @@ export class RedisAdapter extends BaseCacheAdapter {
     const pipeline = this.client.pipeline();
     let queued = 0;
     for (const entry of entries) {
+      // undefined is never stored — see set().
+      if (entry.value === undefined) continue;
       const effectiveTtl = this.resolveTtl(entry.ttlMs);
       // ttlMs <= 0 means already expired — don't store
       if (effectiveTtl !== undefined && effectiveTtl <= 0) continue;

@@ -31,12 +31,13 @@ const cache = new CacheManager({
 
 ### `RedisAdapterOptions`
 
-| Property       | Type     | Default      | Description                                                                                                                                    |
-| -------------- | -------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `client`       | `Redis`  | _(required)_ | A configured ioredis client instance.                                                                                                          |
-| `prefix`       | `string` | `""`         | String prepended to all keys for infrastructure-level isolation.                                                                               |
-| `defaultTtlMs` | `number` | _none_       | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
-| `maxTtlMs`     | `number` | _none_       | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
+| Property               | Type      | Default      | Description                                                                                                                                    |
+| ---------------------- | --------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client`               | `Redis`   | _(required)_ | A configured ioredis client instance.                                                                                                          |
+| `prefix`               | `string`  | `""`         | String prepended to all keys for infrastructure-level isolation.                                                                               |
+| `allowUnprefixedClear` | `boolean` | `false`      | Permits `clear()`/`flushAll()` when no `prefix` is set. Without it, those methods refuse to run rather than delete the whole database.         |
+| `defaultTtlMs`         | `number`  | _none_       | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
+| `maxTtlMs`             | `number`  | _none_       | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
 
 ### Key Prefixing
 
@@ -58,7 +59,20 @@ When you call `userCache.set("42", userData)`, the actual Redis key is `myapp:us
 
 The `clear()` method only deletes keys matching the adapter's prefix, so different prefixes are fully isolated.
 
-`clear()` and `flushAll()` both delete only keys under the adapter's `prefix`, using incremental `SCAN` (never `FLUSHDB`). With an empty prefix this still scans and deletes every key in the database — always configure a `prefix` when the Redis database is shared.
+`clear()` and `flushAll()` both delete only keys under the adapter's `prefix`, using incremental `SCAN` (never `FLUSHDB`).
+
+With an empty prefix there is nothing to scope to, so both methods **throw instead of running** — deleting every key in a possibly shared database is not something to do by accident:
+
+```ts
+const adapter = new RedisAdapter({ client: redis }); // no prefix
+await adapter.clear(); // throws
+
+// Wiping the whole database is a deliberate choice:
+const wipe = new RedisAdapter({ client: redis, allowUnprefixedClear: true });
+await wipe.clear(); // scans and deletes everything
+```
+
+Reads, writes, and single-key deletes are unaffected by this — only the two bulk operations are guarded.
 
 ## How Data is Stored
 
@@ -76,7 +90,7 @@ Values are stored as JSON strings in Redis. Each entry is a serialized `CacheEnt
 - **With TTL**: The adapter uses Redis `PSETEX` (set with millisecond precision expiry). Redis handles expiration natively, and the `expiresAt` timestamp is stored in the JSON for backfill TTL calculations.
 - **Without TTL**: The adapter uses `SET` with no expiry. The `expiresAt` field is `null`.
 
-Both Redis-native TTL and the `expiresAt` check in `get` are enforced. If a key somehow survives past its `expiresAt` (e.g., clock drift), the adapter catches it on read and deletes the stale entry.
+Both Redis-native TTL and the `expiresAt` check in `get` are enforced. Redis owns the real expiry; the `expiresAt` check is a backstop for clock drift, and an entry that fails it is reported as a miss **without being deleted**. A reader whose clock runs fast must not evict entries that other nodes still consider valid.
 
 ## Sharing a Redis Client
 
@@ -166,13 +180,13 @@ await cache.set("dates", {
 });
 ```
 
-`get()` and `mget()` treat an unparseable (corrupt or legacy) cached payload as a miss and delete the offending key, so a single bad entry can't fail a read or a whole batch. Because this deletion happens on read, with an empty `prefix` on a shared database an unparseable foreign key read through the adapter will be deleted — one more reason to always set a `prefix`.
+`get()` and `mget()` treat an unparseable (corrupt or legacy) cached payload as a miss, so a single bad entry can't fail a read or a whole batch. Reads never delete: a read-then-delete would race a concurrent writer refreshing the key, and with an empty `prefix` it could reach keys the adapter does not own. The bad payload is replaced by the next `set()` for that key — which `wrap()` does automatically on the miss it just reported.
 
 ## Production Tips
 
 ### Use a Prefix
 
-Always set a `prefix` in production. This prevents key collisions with other applications or cache instances sharing the same Redis and makes `clear()` safe to call.
+Always set a `prefix` in production. This prevents key collisions with other applications or cache instances sharing the same Redis, and it is what makes `clear()` safe to call at all — without one, `clear()` and `flushAll()` refuse to run.
 
 ### Handle Redis Failures Gracefully
 
@@ -180,4 +194,4 @@ Ziggurat's CacheManager automatically skips failing layers. If Redis is down, yo
 
 ### Monitor Key Count
 
-The `clear()` method uses `KEYS` to find matching prefixed keys. In production Redis instances with millions of keys, prefer periodic TTL-based expiration over calling `clear()`.
+The `clear()` method walks the keyspace with incremental `SCAN`, which does not block the server but does cost a full pass. On instances with millions of keys, prefer TTL-based expiration over calling `clear()`.

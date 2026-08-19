@@ -9,7 +9,7 @@
 #   1. Add a service definition below with `profiles: [backend-name]`
 #   2. Expose the default port and add a health check
 #   3. Add the corresponding env var to .env.example
-#   4. Add a matrix entry in .github/workflows/functional-tests.yml
+#   4. Add a matrix entry to the `functional` job in .github/workflows/ci.yml
 
 services:
   redis:

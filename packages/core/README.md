@@ -50,7 +50,7 @@ const cache = new CacheManager({
   ],
 });
 
-// L1 miss -> L2 hit -> value returned + L1 backfilled
+// L1 miss -> L2 hit -> value returned + L1 backfilled under its own 30s policy
 const product = await cache.wrap(id, async () => api.getProduct(id));
 ```
 

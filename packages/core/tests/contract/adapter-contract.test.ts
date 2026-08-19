@@ -105,6 +105,25 @@ export function runAdapterContractTests(
         expect(result).not.toBeNull();
         expect(result!.value).toBe("value1");
       });
+
+      it("should treat an undefined value as a no-op write", async () => {
+        // No backend can round-trip undefined, so every adapter agrees:
+        // the write is skipped and the key reads as absent everywhere.
+        await expect(adapter.set("key1", undefined)).resolves.toBeUndefined();
+        expect(await adapter.get("key1")).toBeNull();
+        expect(await adapter.has("key1")).toBe(false);
+        expect((await adapter.getTtl("key1")).kind).toBe("missing");
+        if (supportsKeys) {
+          expect(await adapter.keys()).not.toContain("key1");
+        }
+      });
+
+      it("should not clobber an existing value with an undefined write", async () => {
+        await adapter.set("key1", "value1");
+        await adapter.set("key1", undefined);
+        const result = await adapter.get<string>("key1");
+        expect(result!.value).toBe("value1");
+      });
     });
 
     describe("TTL expiry", () => {
@@ -304,6 +323,15 @@ export function runAdapterContractTests(
       it("should treat negative ttlMs as already expired (not stored)", async () => {
         await adapter.mset([
           { key: "a", value: 1, ttlMs: -1000 },
+          { key: "b", value: 2 },
+        ]);
+        expect(await adapter.get("a")).toBeNull();
+        expect((await adapter.get<number>("b"))!.value).toBe(2);
+      });
+
+      it("should skip undefined values without failing the batch", async () => {
+        await adapter.mset([
+          { key: "a", value: undefined },
           { key: "b", value: 2 },
         ]);
         expect(await adapter.get("a")).toBeNull();

@@ -27,7 +27,7 @@ const userCache = new CacheManager({
 **How it works**:
 
 - `wrap("42", factory)` → checks memory for `users:42` → checks Redis → calls factory
-- On a Redis hit, memory is auto-backfilled with memory's own 30s TTL
+- On a Redis hit, memory is auto-backfilled with memory's own 30s TTL (capped by whatever life the Redis entry has left)
 - On a factory call, memory gets 30s TTL, Redis gets 5min TTL
 
 ### Three-Layer (Memory + Redis + Fallback)
@@ -334,6 +334,21 @@ const cache = new CacheManager({ layers, strictWrites: true });
 
 `strictWrites` applies to direct `set`/`mset`/`delete`/`mdel` calls. `wrap()` is unaffected: it always returns the value your factory computed, even if caching that value fails — the write error still surfaces via `"error"` events. In a single-layer setup, any write failure means "every layer failed", so it throws.
 
+## Miss latency and `wrapWrites`
+
+By default `wrap()` resolves only after the computed value has been written to every layer, so a read issued right after it is guaranteed to see the value. The cost is that a slow layer adds its full write latency to every miss — and to every caller coalesced onto that miss. A Redis instance that is degraded rather than down is the case that hurts: it accepts writes, slowly, and each `wrap()` miss waits for them.
+
+Set `wrapWrites: "background"` to resolve as soon as the factory does and let the layer writes settle afterwards:
+
+```ts
+const cache = new CacheManager({
+  layers: [memory, redis],
+  wrapWrites: "background", // default is "await"
+});
+```
+
+The trade-off is a brief window where `wrap()` has returned but the value is not cached yet, so a request arriving inside that window recomputes it. Write failures still surface as `"error"` events either way. Keep the default when correctness depends on read-your-write behavior (a `wrap()` immediately followed by a `get()` on the same key); choose `"background"` when miss latency matters more.
+
 ## Value fidelity across layers
 
 `MemoryAdapter` stores live references by default, while the Redis, SQLite, and Memcache adapters JSON round-trip values. A `Date` survives an L1 hit but comes back as an ISO string when L2 serves the same key. If you cache rich types in a multi-layer setup, either store plain JSON-safe data or set `new MemoryAdapter({ serialization: "json" })` for consistent shapes (this also prevents callers from mutating cached objects in place). Note that in `json` mode, non-serializable values (functions, circular references) throw at `set()` time and `undefined` is not stored.
@@ -456,7 +471,7 @@ This runs functional tests for all configured backends (Redis, Memcached, SQLite
 
 ### CI Workflow
 
-Functional tests run automatically in GitHub Actions via `.github/workflows/functional-tests.yml`. Each backend is provisioned as a service container and tested in a separate matrix job, reporting results independently from the hermetic test suite.
+Functional tests run automatically in GitHub Actions via the `functional` jobs in `.github/workflows/ci.yml`. Each backend is provisioned as a service container and tested in a separate matrix job, reporting results independently from the hermetic test suite.
 
 ### Adding a New Backend
 
@@ -467,5 +482,5 @@ To add functional tests for a new adapter (e.g., Postgres):
 3. Add `test:functional` script to the adapter's `package.json`
 4. Add a profile to `docker-compose.yml`
 5. Add the env var (e.g., `POSTGRES_URL`) to `.env.example`
-6. Add a matrix entry in `.github/workflows/functional-tests.yml`
+6. Add a matrix entry to the `functional` job in `.github/workflows/ci.yml`
 7. Add `test:functional:<adapter>` to the root `package.json`

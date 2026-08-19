@@ -18,14 +18,15 @@ new CacheManager(options: CacheManagerOptions)
 
 **`CacheManagerOptions`**:
 
-| Property       | Type                               | Default              | Description                                                                                                                           |
-| -------------- | ---------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `layers`       | `CacheAdapter[]`                   | _(required)_         | Ordered array of cache layers. L1 is index 0 (fastest). Must contain at least one adapter — the constructor throws on an empty array. |
-| `namespace`    | `string`                           | _none_               | Prefix prepended to all keys as `namespace:key`. Useful for logical grouping.                                                         |
-| `syncBackfill` | `boolean`                          | `false`              | When `true`, waits for backfill to complete before returning.                                                                         |
-| `strictWrites` | `boolean`                          | `false`              | When `true`, `set`/`mset`/`delete`/`mdel` throw an `AggregateError` if **every** layer fails the write. `wrap()` is unaffected.       |
-| `stampede`     | `StampedeConfig`                   | `{ coalesce: true }` | Stampede protection configuration.                                                                                                    |
-| `events`       | `TypedEventEmitter<CacheEventMap>` | _(auto-created)_     | Optional shared event emitter for observability. If omitted, an internal one is created.                                              |
+| Property       | Type                               | Default              | Description                                                                                                                                        |
+| -------------- | ---------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `layers`       | `CacheAdapter[]`                   | _(required)_         | Ordered array of cache layers. L1 is index 0 (fastest). Must contain at least one adapter — the constructor throws on an empty array.              |
+| `namespace`    | `string`                           | _none_               | Prefix prepended to all keys as `namespace:key`. Useful for logical grouping.                                                                      |
+| `syncBackfill` | `boolean`                          | `false`              | When `true`, waits for backfill to complete before returning.                                                                                      |
+| `wrapWrites`   | `"await" \| "background"`          | `"await"`            | Whether `wrap()` waits for the computed value to reach every layer before resolving. `"background"` trades read-your-write for lower miss latency. |
+| `strictWrites` | `boolean`                          | `false`              | When `true`, `set`/`mset`/`delete`/`mdel` throw an `AggregateError` if **every** layer fails the write. `wrap()` is unaffected.                    |
+| `stampede`     | `StampedeConfig`                   | `{ coalesce: true }` | Stampede protection configuration.                                                                                                                 |
+| `events`       | `TypedEventEmitter<CacheEventMap>` | _(auto-created)_     | Optional shared event emitter for observability. If omitted, an internal one is created.                                                           |
 
 **`StampedeConfig`**:
 
@@ -39,6 +40,8 @@ new CacheManager(options: CacheManagerOptions)
 
 Queries layers sequentially from L1 to L*n*. Returns the first hit and backfills higher layers. Returns `null` on a complete miss.
 
+Each backfilled layer applies its own `defaultTtlMs`, capped by the source entry's remaining lifetime, so a layer keeps its own staleness budget and a copy never outlives its source. See [Backfill](core-concepts.md#backfill).
+
 ```ts
 const entry = await cache.get<User>("user:42");
 if (entry) {
@@ -49,11 +52,13 @@ if (entry) {
 
 ##### `set<T>(key: string, value: T, ttlMs?: number): Promise<void>`
 
-Writes the value to **all** layers. TTL is in milliseconds. Omit for no expiration.
+Writes the value to **all** layers. TTL is in milliseconds. Omit to fall back to each layer's `defaultTtlMs`, or to no expiration when a layer has none.
 
 ```ts
 await cache.set("user:42", userData, 300_000);
 ```
+
+A value of `undefined` is never stored — the write is a no-op on every layer and leaves any existing value under that key untouched.
 
 ##### `delete(key: string): Promise<void>`
 
@@ -108,6 +113,8 @@ const user = await cache.wrap(
 3. If not found and coalescing is enabled, check for an in-flight request for the same key. If one exists, attach to it.
 4. Otherwise, call the factory, store the result via `set`, and return the value.
 5. If the factory throws, the error propagates to all coalesced callers and the in-flight entry is cleaned up.
+
+Step 4 waits for every layer to accept the write before resolving. Set `wrapWrites: "background"` on the manager to resolve as soon as the factory does; the writes then settle in the background and failures surface only as `"error"` events.
 
 ##### `del(key: string): Promise<void>`
 
@@ -179,22 +186,22 @@ unsub();
 
 **Available events:**
 
-| Event           | Key Fields                                                       | Emitted When                         |
-| --------------- | ---------------------------------------------------------------- | ------------------------------------ |
-| `hit`           | `key`, `layerName`, `layerIndex`, `durationMs`                   | `get()` finds a value in any layer   |
-| `miss`          | `key`, `durationMs`                                              | `get()` exhausts all layers          |
-| `set`           | `key`, `ttlMs`, `durationMs`                                     | `set()` writes to all layers         |
-| `delete`        | `key`, `durationMs`                                              | `delete()` removes from all layers   |
-| `error`         | `key`, `operation`, `layerName`, `layerIndex`, `error`           | Any layer throws during an operation |
-| `backfill`      | `key`, `sourceLayerName`, `sourceLayerIndex`, `targetLayerNames` | A lower-layer hit triggers backfill  |
-| `wrap:hit`      | `key`, `durationMs`                                              | `wrap()` finds a cached value        |
-| `wrap:miss`     | `key`, `durationMs`, `factoryDurationMs`                         | `wrap()` calls the factory           |
-| `wrap:coalesce` | `key`                                                            | `wrap()` joins an in-flight request  |
-| `mget`          | `keys`, `hitCount`, `missCount`, `durationMs`                    | `mget()` completes                   |
-| `mset`          | `keyCount`, `durationMs`                                         | `mset()` completes                   |
-| `mdel`          | `keyCount`, `durationMs`                                         | `mdel()` completes                   |
+| Event           | Key Fields                                                       | Emitted When                                                                                                                                                     |
+| --------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hit`           | `key`, `layerName`, `layerIndex`, `durationMs`                   | `get()` finds a value in any layer                                                                                                                               |
+| `miss`          | `key`, `durationMs`                                              | `get()` exhausts all layers                                                                                                                                      |
+| `set`           | `key`, `ttlMs`, `durationMs`                                     | `set()` writes to all layers                                                                                                                                     |
+| `delete`        | `key`, `durationMs`                                              | `delete()` removes from all layers                                                                                                                               |
+| `error`         | `key`, `operation`, `layerName`, `layerIndex`, `error`           | Any layer throws during an operation                                                                                                                             |
+| `backfill`      | `key`, `sourceLayerName`, `sourceLayerIndex`, `targetLayerNames` | A backfill is **scheduled** after a lower-layer hit. Emitted before the writes settle; failures arrive separately as `error` events with `operation: "backfill"` |
+| `wrap:hit`      | `key`, `durationMs`                                              | `wrap()` finds a cached value                                                                                                                                    |
+| `wrap:miss`     | `key`, `durationMs`, `factoryDurationMs`                         | `wrap()` calls the factory                                                                                                                                       |
+| `wrap:coalesce` | `key`                                                            | `wrap()` joins an in-flight request                                                                                                                              |
+| `mget`          | `keys`, `hitCount`, `missCount`, `durationMs`                    | `mget()` completes                                                                                                                                               |
+| `mset`          | `keyCount`, `durationMs`                                         | `mset()` completes                                                                                                                                               |
+| `mdel`          | `keyCount`, `durationMs`                                         | `mdel()` completes                                                                                                                                               |
 
-All events include an optional `namespace` field when the manager has a namespace configured.
+All events include an optional `namespace` field when the manager has a namespace configured. `mget` reports its `keys`, `hitCount`, and `missCount` over the deduplicated key set, so repeating a key in one call does not inflate the counts.
 
 See [Observability](#zigguratolel) for OpenTelemetry integration.
 
@@ -226,6 +233,8 @@ type TtlResult =
 ### `BaseCacheAdapter`
 
 Abstract class that implements `CacheAdapter` with default implementations for all extended methods. New adapters should extend this class and only implement the 4 core methods: `get`, `set`, `delete`, `clear`.
+
+Extending it also supplies `ttlPolicy` from the TTL options you pass to `super()`, which is how `CacheManager` keeps backfilled entries inside your layer's policy. The default `mget` returns a **partial result** — a key whose `get` throws is omitted rather than rejecting the batch — while `mset`/`mdel` reject so a failed write is reported as a layer failure.
 
 ```ts
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
@@ -303,6 +312,8 @@ The contract every storage backend must implement.
 ```ts
 interface CacheAdapter {
   readonly name: string;
+  /** Optional; lets CacheManager keep backfilled copies within this layer's policy. */
+  readonly ttlPolicy?: { defaultTtlMs?: number; maxTtlMs?: number };
   get<T>(key: string): Promise<CacheEntry<T> | null>;
   set<T>(key: string, value: T, ttlMs?: number): Promise<void>;
   delete(key: string): Promise<void>;
@@ -339,12 +350,13 @@ new RedisAdapter(options: RedisAdapterOptions)
 
 **`RedisAdapterOptions`**:
 
-| Property       | Type              | Default      | Description                                                                                                                                    |
-| -------------- | ----------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `client`       | `Redis` (ioredis) | _(required)_ | A configured ioredis client instance.                                                                                                          |
-| `prefix`       | `string`          | `""`         | Key prefix for infrastructure-level isolation. All keys are stored as `prefix + key`.                                                          |
-| `defaultTtlMs` | `number`          | _none_       | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
-| `maxTtlMs`     | `number`          | _none_       | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
+| Property               | Type              | Default      | Description                                                                                                                                    |
+| ---------------------- | ----------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client`               | `Redis` (ioredis) | _(required)_ | A configured ioredis client instance.                                                                                                          |
+| `prefix`               | `string`          | `""`         | Key prefix for infrastructure-level isolation. All keys are stored as `prefix + key`.                                                          |
+| `allowUnprefixedClear` | `boolean`         | `false`      | Permits `clear()`/`flushAll()` with no `prefix` configured. Without it they throw rather than deleting every key in the database.              |
+| `defaultTtlMs`         | `number`          | _none_       | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
+| `maxTtlMs`             | `number`          | _none_       | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
 
 ```ts
 import Redis from "ioredis";
@@ -366,10 +378,10 @@ const adapter = new RedisAdapter({
 
 Implements the full `CacheAdapter` interface.
 
-- **`get`**: Fetches the key from Redis, parses the JSON, and checks expiration. Returns `null` for missing or expired keys.
-- **`set`**: Serializes the value as `{ value, expiresAt }` JSON. Uses `PSETEX` for entries with TTL, `SET` for entries without.
+- **`get`**: Fetches the key from Redis, parses the JSON, and checks expiration. Returns `null` for missing, expired, or unparseable keys — reads never delete.
+- **`set`**: Serializes the value as `{ value, expiresAt }` JSON. Uses `PSETEX` for entries with TTL, `SET` for entries without. An `undefined` value is skipped.
 - **`delete`**: Deletes the prefixed key.
-- **`clear`**: Scans for all keys matching the prefix pattern and deletes them using a pipeline. Pipeline command failures throw `AggregateError`.
+- **`clear`**: Scans for all keys matching the prefix pattern and deletes them using a pipeline. Pipeline command failures throw `AggregateError`. Throws when no `prefix` is configured unless `allowUnprefixedClear` is set.
 - **`mget`**: Uses a pipeline for batch reads. Per-key read errors are skipped and the successful entries are returned — this means `mget()` may return a partial result map rather than rejecting the entire batch.
 - **`mset`**: Uses a pipeline for batch writes. Entries with `ttlMs <= 0` are skipped. Pipeline command failures throw `AggregateError`.
 
@@ -521,9 +533,11 @@ instrumentCacheManager(cacheManager: CacheManager, options?: InstrumentationOpti
 
 Returns a cleanup function that unsubscribes all listeners.
 
+Every metric carries a `cache.namespace` attribute when the instrumented manager has a namespace, so several managers sharing one meter stay distinguishable. Managers without a namespace record no such attribute.
+
 #### Recorded Metrics
 
-**Counters:**
+**Counters:** (`cache.namespace` is added to every row below when the manager has one)
 
 | Metric Name                    | Attributes                       | Description                              |
 | ------------------------------ | -------------------------------- | ---------------------------------------- |

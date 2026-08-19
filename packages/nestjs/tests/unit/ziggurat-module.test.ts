@@ -7,6 +7,16 @@ import { CACHE_MANAGER } from "../../src/constants.js";
 import { CacheManager, MemoryAdapter } from "@ziggurat-cache/core";
 
 describe("ZigguratModule", () => {
+  describe("CACHE_MANAGER token", () => {
+    it("should not collide with the @nestjs/cache-manager token value", () => {
+      // ZigguratModule registers globally, so sharing the bare "CACHE_MANAGER"
+      // string with @nestjs/cache-manager would let resolution order decide
+      // which manager a consumer is injected with.
+      expect(CACHE_MANAGER).not.toBe("CACHE_MANAGER");
+      expect(CACHE_MANAGER).toBe("ZIGGURAT_CACHE_MANAGER");
+    });
+  });
+
   describe("forRoot", () => {
     it("should provide CacheManager via CACHE_MANAGER token", async () => {
       const module = await Test.createTestingModule({

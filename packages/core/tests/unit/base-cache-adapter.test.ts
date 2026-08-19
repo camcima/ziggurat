@@ -234,8 +234,10 @@ describe("TTL resolution (defaultTtlMs / maxTtlMs)", () => {
 describe("BaseCacheAdapter batch error propagation", () => {
   const adapter = new FailingAdapter();
 
-  it("mget should reject when underlying get calls fail", async () => {
-    await expect(adapter.mget(["a", "b"])).rejects.toThrow("get failed");
+  it("mget should return a partial result rather than rejecting when gets fail", async () => {
+    // Reads degrade to partial results so one bad key cannot cost the caller
+    // the whole batch — and, through CacheManager, the whole layer.
+    await expect(adapter.mget(["a", "b"])).resolves.toEqual(new Map());
   });
 
   it("mset should reject when underlying set calls fail", async () => {

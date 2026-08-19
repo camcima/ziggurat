@@ -54,9 +54,40 @@ jobs:
       - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:
           use_oidc: true
-          files: packages/core/coverage/coverage-final.json,packages/redis/coverage/coverage-final.json,packages/memcache/coverage/coverage-final.json,packages/sqlite/coverage/coverage-final.json,packages/nestjs/coverage/coverage-final.json
+          files: packages/core/coverage/coverage-final.json,packages/redis/coverage/coverage-final.json,packages/memcache/coverage/coverage-final.json,packages/sqlite/coverage/coverage-final.json,packages/nestjs/coverage/coverage-final.json,packages/otel/coverage/coverage-final.json
           flags: unit
           fail_ci_if_error: true
+
+  # Guards the `engines: >=20` floor the published packages advertise. The
+  # required `test` job pins Node 22, and the repo's own toolchain cannot run
+  # any lower (pnpm 11 requires >= 22.13), so this builds on 22 and then loads
+  # the built output under the oldest and newest supported runtimes the way a
+  # consumer would — plain `node`, no pnpm. Kept as its own job so the
+  # required check names stay stable.
+  compat:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "24"]
+    name: compat (node ${{ matrix.node-version }})
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 11.10.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Switch to Node ${{ matrix.node-version }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Load the built packages on Node ${{ matrix.node-version }}
+        run: node scripts/smoke-test.mjs
 
   functional:
     runs-on: ubuntu-latest

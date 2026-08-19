@@ -97,7 +97,7 @@ const cache = new CacheManager({
   ],
 });
 
-// L1 miss → L2 hit → value returned + L1 backfilled with L1's own TTL
+// L1 miss → L2 hit → value returned + L1 backfilled under L1's own TTL policy
 const product = await cache.wrap(id, async () => api.getProduct(id));
 ```
 

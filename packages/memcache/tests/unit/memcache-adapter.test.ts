@@ -69,14 +69,16 @@ describe("MemcacheAdapter", () => {
       expect(result!.value).toEqual({ foo: "bar" });
     });
 
-    it("returns null and deletes the key on corrupt JSON", async () => {
+    it("returns null on corrupt JSON without deleting the key", async () => {
       await mockClient.set("bad", "{not json");
       const result = await adapter.get("bad");
       expect(result).toBeNull();
-      expect(mockClient.delete).toHaveBeenCalledWith("bad");
+      // Reads must not delete: it would race a concurrent writer, and with an
+      // empty prefix it would reach keys this adapter does not own.
+      expect(mockClient.delete).not.toHaveBeenCalled();
     });
 
-    it("deletes the prefixed key on corrupt JSON when a prefix is set", async () => {
+    it("returns null for a corrupt prefixed key without deleting it", async () => {
       const prefixed = new MemcacheAdapter({
         client: mockClient,
         prefix: "app:",
@@ -84,7 +86,7 @@ describe("MemcacheAdapter", () => {
       await mockClient.set("app:bad", "{not json");
       const result = await prefixed.get("bad");
       expect(result).toBeNull();
-      expect(mockClient.delete).toHaveBeenCalledWith("app:bad");
+      expect(mockClient.delete).not.toHaveBeenCalled();
     });
   });
 

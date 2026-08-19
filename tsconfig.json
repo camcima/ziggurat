@@ -3,10 +3,13 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["vitest.workspace.ts"],
+  "files": [],
   "references": [
     { "path": "packages/core" },
     { "path": "packages/redis" },
-    { "path": "packages/nestjs" }
+    { "path": "packages/memcache" },
+    { "path": "packages/sqlite" },
+    { "path": "packages/nestjs" },
+    { "path": "packages/otel" }
   ]
 }

@@ -165,6 +165,20 @@ describe("CacheManager (single-layer)", () => {
       const result = await manager.mget([]);
       expect(result.size).toBe(0);
     });
+
+    it("should deduplicate repeated keys when counting hits and misses", async () => {
+      await manager.set("a", 1);
+      const events: { hitCount: number; missCount: number }[] = [];
+      manager.on("mget", (e) =>
+        events.push({ hitCount: e.hitCount, missCount: e.missCount }),
+      );
+
+      await manager.mget<number>(["a", "a", "missing", "missing"]);
+
+      // Two distinct keys were asked for: one hit, one miss. Counting the
+      // repeats would report a miss that never happened.
+      expect(events).toEqual([{ hitCount: 1, missCount: 1 }]);
+    });
   });
 
   describe("mset", () => {
@@ -905,6 +919,60 @@ describe("strictWrites", () => {
     expect(value).toBe("computed");
     // the failed cache write surfaced as an error event, not a throw
     expect(errors).toContain("set");
+  });
+});
+
+describe("wrapWrites", () => {
+  function slowWriteAdapter(delayMs: number): MemoryAdapter {
+    const a = new MemoryAdapter();
+    const realSet = a.set.bind(a);
+    vi.spyOn(a, "set").mockImplementation(async (key, value, ttlMs) => {
+      await new Promise((r) => setTimeout(r, delayMs));
+      await realSet(key, value, ttlMs);
+    });
+    return a;
+  }
+
+  it("awaits layer writes by default, so a read after wrap() sees the value", async () => {
+    const layer = slowWriteAdapter(30);
+    const cache = new CacheManager({ layers: [layer] });
+
+    await cache.wrap("k", async () => "v");
+
+    expect((await layer.get<string>("k"))!.value).toBe("v");
+  });
+
+  it('resolves before the writes settle when wrapWrites is "background"', async () => {
+    const layer = slowWriteAdapter(30);
+    const cache = new CacheManager({
+      layers: [layer],
+      wrapWrites: "background",
+    });
+
+    expect(await cache.wrap("k", async () => "v")).toBe("v");
+    // The write is still in flight — that is the point of the option.
+    expect(await layer.get("k")).toBeNull();
+
+    await vi.waitFor(async () => {
+      expect((await layer.get<string>("k"))!.value).toBe("v");
+    });
+  });
+
+  it("still reports background write failures via error events", async () => {
+    const layer = new MemoryAdapter();
+    vi.spyOn(layer, "set").mockRejectedValue(new Error("down"));
+    const cache = new CacheManager({
+      layers: [layer],
+      wrapWrites: "background",
+    });
+    const errors: unknown[] = [];
+    cache.on("error", (e) => errors.push(e.error));
+
+    expect(await cache.wrap("k", async () => "v")).toBe("v");
+
+    await vi.waitFor(() => {
+      expect(errors).toHaveLength(1);
+    });
   });
 });
 

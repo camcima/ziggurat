@@ -12,6 +12,19 @@ pnpm install
 
 Running `pnpm install` automatically sets up [Lefthook](https://github.com/evilmartians/lefthook) git hooks, which enforce code quality and commit message standards.
 
+### Node versions
+
+Two different floors apply, and they are not the same number:
+
+| Where                             | Node    | Why                                                                        |
+| --------------------------------- | ------- | -------------------------------------------------------------------------- |
+| **Developing this repo**          | ≥ 22.13 | pnpm 11 loads the `node:sqlite` builtin, which does not exist before 22.13 |
+| **Consuming a published package** | ≥ 20    | What the shipped bundles actually require at runtime                       |
+
+The root `package.json` is `private: true`, so its `engines.node` (`>=22.13`) constrains contributors only. The six published packages declare `>=20` because that is what their built output needs — `scripts/smoke-test.mjs` loads every bundle and exercises the core API on Node 20 in CI, so the claim stays honest.
+
+Don't "fix" the mismatch by raising the packages to match the root. They describe different audiences.
+
 ## Git Hooks
 
 This project uses Lefthook to run the following hooks automatically:
@@ -87,3 +100,13 @@ BREAKING CHANGE: The `layers` option is now required.
    ```
 5. Commit using a conventional commit message
 6. Submit a pull request
+
+## Releasing
+
+`pnpm release` runs [release-it](https://github.com/release-it/release-it), which derives the version bump and the `CHANGELOG.md` entry from the conventional commits since the last tag. Preview it without changing anything:
+
+```bash
+npx release-it --dry-run
+```
+
+> **One-time note for the next release:** commit [`4c0a23c`](https://github.com/camcima/ziggurat/commit/4c0a23c) carries the footer `BREAKING CHANGE: minimum supported Node.js is now 22.13 (was 20).`, so the generated changelog will list it. That change only raised the **private root** `engines.node` and the CI runner — the published packages never dropped Node 20, and CI verifies they still work on it. Delete that one bullet from the generated `CHANGELOG.md` before completing the release, so it doesn't announce a consumer-facing break that never happened. This note can go away once that release has shipped.

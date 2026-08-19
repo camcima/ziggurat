@@ -36,8 +36,11 @@ const user = await cache.wrap(`user:${id}`, async () => api.getUser(id));
 ```ts
 interface SQLiteAdapterOptions {
   db: Database; // better-sqlite3 database instance
-  defaultTtlMs?: number; // Default TTL in milliseconds
-  tableName?: string; // Table name (default: "cache")
+  defaultTtlMs?: number; // Fallback TTL when a call passes none
+  maxTtlMs?: number; // Upper bound applied to every entry
+  tableName?: string; // Table name (default: "ziggurat_cache")
+  namespace?: string; // Key namespace within the table (default: "")
+  busyTimeoutMs?: number; // Wait for a competing writer (default: 5000)
 }
 ```
 

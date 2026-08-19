@@ -48,8 +48,13 @@ instrumentCacheManager(cache, {
 | `ziggurat.cache.wrap.hit`              | Counter   | `wrap()` served from cache                                              |
 | `ziggurat.cache.wrap.miss`             | Counter   | `wrap()` called the factory                                             |
 | `ziggurat.cache.wrap.coalesce`         | Counter   | Concurrent requests coalesced                                           |
+| `ziggurat.cache.mget`                  | Counter   | Batch reads                                                             |
+| `ziggurat.cache.mset`                  | Counter   | Batch writes                                                            |
+| `ziggurat.cache.mdel`                  | Counter   | Batch deletes                                                           |
 | `ziggurat.cache.duration`              | Histogram | Operation duration in ms (attributes: `cache.operation`, `cache.layer`) |
 | `ziggurat.cache.wrap.factory_duration` | Histogram | Factory call duration in ms                                             |
+
+Every metric also carries a `cache.namespace` attribute when the instrumented `CacheManager` has a namespace configured, so several managers sharing one meter stay distinguishable.
 
 ## Prometheus Example
 

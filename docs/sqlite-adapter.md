@@ -29,13 +29,14 @@ const cache = new CacheManager({
 
 ## Configuration
 
-| Property       | Type                | Default            | Description                                                                                                                                    |
-| -------------- | ------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db`           | `Database.Database` | _(required)_       | A better-sqlite3 database instance.                                                                                                            |
-| `tableName`    | `string`            | `"ziggurat_cache"` | Name of the cache table.                                                                                                                       |
-| `namespace`    | `string`            | `""`               | Namespace for key isolation within the same table.                                                                                             |
-| `defaultTtlMs` | `number`            | _none_             | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
-| `maxTtlMs`     | `number`            | _none_             | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
+| Property        | Type                | Default            | Description                                                                                                                                    |
+| --------------- | ------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db`            | `Database.Database` | _(required)_       | A better-sqlite3 database instance.                                                                                                            |
+| `tableName`     | `string`            | `"ziggurat_cache"` | Name of the cache table.                                                                                                                       |
+| `namespace`     | `string`            | `""`               | Namespace for key isolation within the same table.                                                                                             |
+| `defaultTtlMs`  | `number`            | _none_             | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
+| `maxTtlMs`      | `number`            | _none_             | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
+| `busyTimeoutMs` | `number`            | `5000`             | How long a blocked write waits for a competing writer before failing with `SQLITE_BUSY`. Set `0` to keep SQLite's no-wait default.             |
 
 ## Schema
 
@@ -55,7 +56,13 @@ CREATE TABLE IF NOT EXISTS ziggurat_cache (
 - **Prepared statements** are cached and reused for all operations.
 - Values are stored as JSON text; `expires_at` is a Unix timestamp in milliseconds.
 
-The adapter sets `journal_mode = WAL` and `synchronous = NORMAL` on the database you pass in. WAL mode persists on the database file — use a dedicated database file for the cache if that matters.
+The adapter sets `journal_mode = WAL`, `synchronous = NORMAL`, and `busy_timeout` (5s by default) on the database you pass in. WAL mode persists on the database file — use a dedicated database file for the cache if that matters.
+
+## Concurrent Access
+
+WAL mode lets readers and a writer work at the same time, and `busyTimeoutMs` makes a blocked writer wait its turn instead of failing immediately with `SQLITE_BUSY`.
+
+Reads clean up as they go: a `get` that finds an expired or unparseable row deletes it. Those deletes are conditional on the row still being the one that was read (still expired, or still holding the same corrupt payload), so a writer that refreshed the key between the read and the delete is never clobbered.
 
 ## Namespace Isolation
 

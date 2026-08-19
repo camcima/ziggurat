@@ -55,7 +55,14 @@ Namespaces are joined with `:` and not escaped: namespace `"a"` + key `"b:c"` pr
 
 When a value is found in a lower layer (e.g., L2), the CacheManager automatically **backfills** all higher layers (e.g., L1) so subsequent reads are served from the fastest layer.
 
-If the target adapter has a `defaultTtlMs`, backfill uses that TTL. Otherwise, it falls back to the remaining TTL from the source entry. This means L1 always uses its own TTL policy, regardless of L2's expiration.
+Each target layer applies its own TTL policy to the copy it receives, capped by whatever life the source entry has left:
+
+- Target has a `defaultTtlMs` → the copy gets `min(defaultTtlMs, source's remaining TTL)`.
+- Target has no `defaultTtlMs` → the copy gets the source's remaining TTL.
+- Source entry is permanent → the target applies its own policy with nothing to cap it.
+- A target's `maxTtlMs` caps the result either way.
+
+So L1 keeps its own staleness budget rather than inheriting L2's, and a backfilled copy never outlives the entry it was copied from. In a three-layer stack each target is computed independently — an L3 hit can backfill L1 with 10s and L2 with 60s from the same read.
 
 ### Backfill Modes
 
@@ -162,7 +169,7 @@ TTL is specified in **milliseconds**. There are two ways to configure it:
 
 ### Per-Adapter TTL (Recommended)
 
-Set `defaultTtlMs` on each adapter. This is the recommended approach for multi-layer setups because each layer can have its own expiration policy:
+Set `defaultTtlMs` on each adapter — the fallback used when a call passes no TTL of its own. This is the recommended approach for multi-layer setups because each layer can have its own expiration policy:
 
 ```ts
 const cache = new CacheManager({
@@ -176,23 +183,29 @@ const cache = new CacheManager({
 await cache.wrap("key", factory);
 ```
 
-### Per-Call TTL (Fallback)
+### Per-Call TTL
 
-You can also pass TTL directly to `set` or `wrap`. This acts as a fallback — if the adapter has `defaultTtlMs`, the adapter's TTL takes precedence.
+You can also pass a TTL directly to `set` or `wrap`. An explicit TTL wins over the adapter's `defaultTtlMs`:
 
 ```ts
-// Only used if the adapter has no defaultTtlMs
+// Overrides defaultTtlMs on every layer
 await cache.set("key", value, 300_000);
 await cache.wrap("key", factory, 300_000);
 ```
 
 ### TTL Resolution Order
 
-1. Adapter's `defaultTtlMs` (if set) — always wins
-2. TTL passed via `set`/`wrap` — fallback
+1. TTL passed via `set`/`wrap` (if given) — wins
+2. Adapter's `defaultTtlMs` — fallback when no TTL was passed
 3. No TTL — entry never expires
 
+The adapter's `maxTtlMs`, when set, caps whatever the first two steps produce — including otherwise-permanent entries. Use `defaultTtlMs` for "what a layer does when nobody says otherwise" and `maxTtlMs` for "what a layer will never exceed."
+
 Internally, TTL is stored as an absolute Unix timestamp (`expiresAt`) on the `CacheEntry`. Expired entries are lazily cleaned up on the next `get` call.
+
+### Values that are never stored
+
+`set(key, undefined)` and `mset` entries whose value is `undefined` are silently skipped by every adapter — no backend can round-trip `undefined`, so storing it would read back as either a miss or a hit carrying `undefined`, depending on the layer. The write is a no-op: `get`, `has`, `getTtl`, and `keys` all report the key as absent, and an existing value under that key is left untouched rather than being overwritten.
 
 ## Observability
 

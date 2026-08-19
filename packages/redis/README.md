@@ -34,8 +34,10 @@ const user = await cache.wrap(`user:${id}`, async () => db.users.findById(id));
 ```ts
 interface RedisAdapterOptions {
   client: Redis; // ioredis client instance
-  defaultTtlMs?: number; // Default TTL in milliseconds
+  defaultTtlMs?: number; // Fallback TTL when a call passes none
+  maxTtlMs?: number; // Upper bound applied to every entry
   prefix?: string; // Key prefix (default: none)
+  allowUnprefixedClear?: boolean; // Permit clear()/flushAll() with no prefix
 }
 ```
 

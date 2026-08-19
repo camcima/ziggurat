@@ -50,6 +50,8 @@ TTLs longer than 30 days are automatically sent to memcached as an absolute expi
 
 Values are JSON-serialized as `{ value, expiresAt }` strings and stored as Buffers. On retrieval, the Buffer is converted back to a string and parsed.
 
+A payload that fails to parse is reported as a miss. Reads never delete — a read-then-delete would race a concurrent writer, and with an empty `prefix` it could reach keys this adapter does not own. The same applies to the embedded `expiresAt` check: memcached owns the real expiry, so the check is only a clock-skew backstop and a reader with a fast clock will not evict entries other nodes still see. The next `set()` for the key replaces the bad payload.
+
 ## Limitations
 
 ### No Key Enumeration
@@ -60,7 +62,7 @@ The Memcached protocol does **not support key enumeration**. Calling `keys()` on
 Error: memcache does not support key enumeration. Override keys() to enable.
 ```
 
-This means `CacheManager.keys()` will exclude keys from Memcache layers. If you need key enumeration, consider using Redis or SQLite as your backing store.
+`CacheManager` does not expose a `keys()` of its own — key enumeration is an adapter-level operation reached through `getLayers()`, and calling it on this adapter throws. If you need key enumeration, use Redis or SQLite as the backing store for that layer.
 
 ### No Namespace-Scoped Clear
 

@@ -150,8 +150,10 @@ See the [docs](docs/) directory for detailed guides:
 
 ## Requirements
 
-- Node.js >= 20
+- Node.js >= 20 — verified in CI by loading the built bundles on Node 20 and 24
 - TypeScript >= 5.x (recommended)
+
+Contributing to this repository needs Node.js >= 22.13, since pnpm 11 does not run below that. See [CONTRIBUTING.md](CONTRIBUTING.md#node-versions).
 
 ## Development
 

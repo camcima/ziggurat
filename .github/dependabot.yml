@@ -10,6 +10,16 @@ updates:
     # compromised) versions have time to be caught before we pull them in.
     cooldown:
       default-days: 7
+    ignore:
+      # tsup 8.5.1 inlines rollup-plugin-dts 6.1.1 (built against TypeScript
+      # 5.7) into its own bundle. On TypeScript 7 the dts build dies with
+      # "Cannot read properties of undefined (reading
+      # 'useCaseSensitiveFileNames')", and because the copy is bundled rather
+      # than resolved, a pnpm override cannot replace it. Hold TypeScript on
+      # 6.x -- minor and patch updates still flow. Drop this entry once tsup
+      # ships a rollup-plugin-dts new enough to handle TypeScript 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: development
@@ -23,3 +33,12 @@ updates:
     open-pull-requests-limit: 5
     cooldown:
       default-days: 7
+    groups:
+      # init and analyze must always run the same version of the action -- a
+      # mismatch fails the job with "Loaded a configuration file for version
+      # X, but running version Y". Dependabot treats each subpath as its own
+      # dependency, so without this group it opens one PR per step and neither
+      # can pass CI on its own.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"

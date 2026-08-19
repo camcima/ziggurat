@@ -58,9 +58,12 @@ jobs:
           flags: unit
           fail_ci_if_error: true
 
-  # Guards the `engines` floor: the required `test` job pins Node 22, so
-  # without this nothing exercises the oldest and newest supported runtimes.
-  # Kept as its own job so the required check names stay stable.
+  # Guards the `engines: >=20` floor the published packages advertise. The
+  # required `test` job pins Node 22, and the repo's own toolchain cannot run
+  # any lower (pnpm 11 requires >= 22.13), so this builds on 22 and then loads
+  # the built output under the oldest and newest supported runtimes the way a
+  # consumer would — plain `node`, no pnpm. Kept as its own job so the
+  # required check names stay stable.
   compat:
     runs-on: ubuntu-latest
     strategy:
@@ -75,11 +78,16 @@ jobs:
           version: 11.10.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: "22"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm test
+      - name: Switch to Node ${{ matrix.node-version }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Load the built packages on Node ${{ matrix.node-version }}
+        run: node scripts/smoke-test.mjs
 
   functional:
     runs-on: ubuntu-latest

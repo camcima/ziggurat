@@ -375,4 +375,75 @@ describe("instrumentCacheManager", () => {
 
     cleanup();
   });
+
+  it("should tag metrics with the manager's namespace", async () => {
+    const manager = new CacheManager({
+      layers: [new MemoryAdapter()],
+      namespace: "users",
+    });
+    const cleanup = instrumentCacheManager(manager);
+
+    await manager.set("k1", "v1");
+    await manager.get("k1");
+
+    const collected = await collectMetrics();
+    for (const name of ["ziggurat.cache.hit", "ziggurat.cache.set"]) {
+      const metric = findMetric(collected, name);
+      expect(metric).toBeDefined();
+      expect(
+        metric!.dataPoints.every(
+          (dp) => dp.attributes["cache.namespace"] === "users",
+        ),
+      ).toBe(true);
+    }
+
+    cleanup();
+  });
+
+  it("should omit the namespace attribute when the manager has none", async () => {
+    const manager = new CacheManager({ layers: [new MemoryAdapter()] });
+    const cleanup = instrumentCacheManager(manager);
+
+    await manager.set("k1", "v1");
+    await manager.get("k1");
+
+    const collected = await collectMetrics();
+    const hitMetric = findMetric(collected, "ziggurat.cache.hit");
+    expect(
+      hitMetric!.dataPoints.every(
+        (dp) => !("cache.namespace" in dp.attributes),
+      ),
+    ).toBe(true);
+
+    cleanup();
+  });
+
+  it("should keep two namespaced managers distinguishable on one meter", async () => {
+    const users = new CacheManager({
+      layers: [new MemoryAdapter()],
+      namespace: "users",
+    });
+    const products = new CacheManager({
+      layers: [new MemoryAdapter()],
+      namespace: "products",
+    });
+    const cleanupUsers = instrumentCacheManager(users);
+    const cleanupProducts = instrumentCacheManager(products);
+
+    await users.get("absent");
+    await products.get("absent");
+    await products.get("absent");
+
+    const collected = await collectMetrics();
+    const missMetric = findMetric(collected, "ziggurat.cache.miss");
+    const byNamespace = (ns: string) =>
+      missMetric!.dataPoints.find(
+        (dp) => dp.attributes["cache.namespace"] === ns,
+      );
+    expect(byNamespace("users")!.value).toBe(1);
+    expect(byNamespace("products")!.value).toBe(2);
+
+    cleanupUsers();
+    cleanupProducts();
+  });
 });

@@ -1,8 +1,22 @@
-import { metrics } from "@opentelemetry/api";
+import { metrics, type Attributes } from "@opentelemetry/api";
 import type { CacheManager } from "@ziggurat-cache/core";
 
 export interface InstrumentationOptions {
   meterName?: string;
+}
+
+/**
+ * Merge the event's namespace into an attribute set so metrics from two
+ * managers over the same meter stay distinguishable. Omitted entirely when
+ * the manager has no namespace, rather than recorded as an empty string.
+ */
+function withNamespace(
+  namespace: string | undefined,
+  attributes: Attributes = {},
+): Attributes {
+  return namespace === undefined
+    ? attributes
+    : { ...attributes, "cache.namespace": namespace };
 }
 
 export function instrumentCacheManager(
@@ -66,100 +80,131 @@ export function instrumentCacheManager(
 
   unsubscribers.push(
     cacheManager.on("hit", (e) => {
-      hitCounter.add(1, {
+      const attributes = withNamespace(e.namespace, {
         "cache.layer": e.layerName,
         "cache.operation": "get",
       });
-      durationHistogram.record(e.durationMs, {
-        "cache.operation": "get",
-        "cache.layer": e.layerName,
-      });
+      hitCounter.add(1, attributes);
+      durationHistogram.record(e.durationMs, attributes);
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("miss", (e) => {
-      missCounter.add(1, { "cache.operation": "get" });
-      durationHistogram.record(e.durationMs, { "cache.operation": "get" });
+      const attributes = withNamespace(e.namespace, {
+        "cache.operation": "get",
+      });
+      missCounter.add(1, attributes);
+      durationHistogram.record(e.durationMs, attributes);
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("set", (e) => {
-      setCounter.add(1);
-      durationHistogram.record(e.durationMs, { "cache.operation": "set" });
+      setCounter.add(1, withNamespace(e.namespace));
+      durationHistogram.record(
+        e.durationMs,
+        withNamespace(e.namespace, { "cache.operation": "set" }),
+      );
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("delete", (e) => {
-      deleteCounter.add(1);
-      durationHistogram.record(e.durationMs, {
-        "cache.operation": "delete",
-      });
+      deleteCounter.add(1, withNamespace(e.namespace));
+      durationHistogram.record(
+        e.durationMs,
+        withNamespace(e.namespace, { "cache.operation": "delete" }),
+      );
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("error", (e) => {
-      errorCounter.add(1, {
-        "cache.layer": e.layerName,
-        "cache.operation": e.operation,
-      });
+      errorCounter.add(
+        1,
+        withNamespace(e.namespace, {
+          "cache.layer": e.layerName,
+          "cache.operation": e.operation,
+        }),
+      );
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("backfill", (e) => {
-      backfillCounter.add(1, { "cache.source_layer": e.sourceLayerName });
+      backfillCounter.add(
+        1,
+        withNamespace(e.namespace, {
+          "cache.source_layer": e.sourceLayerName,
+        }),
+      );
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("wrap:hit", (e) => {
-      wrapHitCounter.add(1);
-      durationHistogram.record(e.durationMs, { "cache.operation": "wrap" });
+      wrapHitCounter.add(1, withNamespace(e.namespace));
+      durationHistogram.record(
+        e.durationMs,
+        withNamespace(e.namespace, { "cache.operation": "wrap" }),
+      );
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("wrap:miss", (e) => {
-      wrapMissCounter.add(1);
-      durationHistogram.record(e.durationMs, { "cache.operation": "wrap" });
-      factoryDurationHistogram.record(e.factoryDurationMs);
+      wrapMissCounter.add(1, withNamespace(e.namespace));
+      durationHistogram.record(
+        e.durationMs,
+        withNamespace(e.namespace, { "cache.operation": "wrap" }),
+      );
+      factoryDurationHistogram.record(
+        e.factoryDurationMs,
+        withNamespace(e.namespace),
+      );
     }),
   );
 
   unsubscribers.push(
-    cacheManager.on("wrap:coalesce", () => {
-      wrapCoalesceCounter.add(1);
+    cacheManager.on("wrap:coalesce", (e) => {
+      wrapCoalesceCounter.add(1, withNamespace(e.namespace));
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("mget", (e) => {
-      mgetCounter.add(1);
+      const attributes = withNamespace(e.namespace, {
+        "cache.operation": "mget",
+      });
+      mgetCounter.add(1, withNamespace(e.namespace));
       if (e.hitCount > 0) {
-        hitCounter.add(e.hitCount, { "cache.operation": "mget" });
+        hitCounter.add(e.hitCount, attributes);
       }
       if (e.missCount > 0) {
-        missCounter.add(e.missCount, { "cache.operation": "mget" });
+        missCounter.add(e.missCount, attributes);
       }
-      durationHistogram.record(e.durationMs, { "cache.operation": "mget" });
+      durationHistogram.record(e.durationMs, attributes);
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("mset", (e) => {
-      msetCounter.add(1);
-      durationHistogram.record(e.durationMs, { "cache.operation": "mset" });
+      msetCounter.add(1, withNamespace(e.namespace));
+      durationHistogram.record(
+        e.durationMs,
+        withNamespace(e.namespace, { "cache.operation": "mset" }),
+      );
     }),
   );
 
   unsubscribers.push(
     cacheManager.on("mdel", (e) => {
-      mdelCounter.add(1);
-      durationHistogram.record(e.durationMs, { "cache.operation": "mdel" });
+      mdelCounter.add(1, withNamespace(e.namespace));
+      durationHistogram.record(
+        e.durationMs,
+        withNamespace(e.namespace, { "cache.operation": "mdel" }),
+      );
     }),
   );
 

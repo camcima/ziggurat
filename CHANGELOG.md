@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0](https://github.com/camcima/ziggurat/compare/v0.2.0...v0.3.0) (2026-08-19)
+
+### ⚠ BREAKING CHANGES
+
+* RedisAdapter.clear()/flushAll() now throw when no
+  prefix is configured; pass allowUnprefixedClear: true to keep wiping the
+  whole database. Redis and Memcached reads no longer delete expired or
+  corrupt keys. BaseCacheAdapter.mget returns partial results instead of
+  rejecting. set(key, undefined) is a no-op on every adapter rather than
+  storing, throwing, or being stored-but-unreadable. Backfilled entries
+  now honor the target layer's defaultTtlMs instead of the source layer's
+  remaining TTL.
+* the CACHE_MANAGER token value changed from
+  "CACHE_MANAGER" to "ZIGGURAT_CACHE_MANAGER". Code that hardcoded the
+  string instead of importing the constant must be updated. The unused
+  ZIGGURAT_OPTIONS export has been removed.
+
+### Bug Fixes
+
+* repair the release pipeline's changelog plugin resolution ([#55](https://github.com/camcima/ziggurat/issues/55)) ([5b6fb81](https://github.com/camcima/ziggurat/commit/5b6fb81f897d0b3d7660317a8afa491a2a5ebab6))
+* resolve architecture review findings (H1-H3, M1-M6, L1-L6) ([#56](https://github.com/camcima/ziggurat/issues/56)) ([c744492](https://github.com/camcima/ziggurat/commit/c74449207292d4f5f37da80a71a3caa0cb4a1e9b))
+
+### Continuous Integration
+
+* require Node 22 for developing this repo, since pnpm 11 needs Node >= 22.13 ([4c0a23c](https://github.com/camcima/ziggurat/commit/4c0a23c9e0954cf63c30a41d4666035e8b84a981)). The published packages still support Node >= 20, verified in CI — see [CONTRIBUTING.md](CONTRIBUTING.md#node-versions).
+
 ## [0.2.0](https://github.com/camcima/ziggurat/compare/v0.1.2...v0.2.0) (2026-06-23)
 
 ### ⚠ BREAKING CHANGES

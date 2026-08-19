@@ -170,6 +170,110 @@ describe("Multi-Layer Cache", () => {
       expect(remainingTtl).toBeGreaterThan(4000);
       expect(remainingTtl).toBeLessThanOrEqual(5000);
     });
+
+    it("backfills with the target layer's own defaultTtlMs, not the source's remaining TTL", async () => {
+      // The documented promise: each layer keeps its own staleness budget.
+      // L1 must not inherit L2's much longer lifetime.
+      const l1Short = new MemoryAdapter({ defaultTtlMs: 30_000 });
+      const l2Long = new MemoryAdapter({ defaultTtlMs: 300_000 });
+      const cache = new CacheManager({
+        layers: [l1Short, l2Long],
+        syncBackfill: true,
+      });
+
+      await l2Long.set("k", "v");
+      await cache.get("k");
+
+      const l1Ttl = await l1Short.getTtl("k");
+      expect(l1Ttl.kind).toBe("expiring");
+      if (l1Ttl.kind === "expiring") {
+        expect(l1Ttl.ttlMs).toBeLessThanOrEqual(30_000);
+        expect(l1Ttl.ttlMs).toBeGreaterThan(29_000);
+      }
+    });
+
+    it("never backfills beyond the source entry's remaining lifetime", async () => {
+      // The source expires in 2s; L1's 30s default must not outlive it.
+      const l1Short = new MemoryAdapter({ defaultTtlMs: 30_000 });
+      const l2Expiring = new MemoryAdapter();
+      const cache = new CacheManager({
+        layers: [l1Short, l2Expiring],
+        syncBackfill: true,
+      });
+
+      await l2Expiring.set("k", "v", 2000);
+      await cache.get("k");
+
+      const l1Ttl = await l1Short.getTtl("k");
+      expect(l1Ttl.kind).toBe("expiring");
+      if (l1Ttl.kind === "expiring") {
+        expect(l1Ttl.ttlMs).toBeLessThanOrEqual(2000);
+      }
+    });
+
+    it("lets the target apply its own policy when the source entry is permanent", async () => {
+      const l1Short = new MemoryAdapter({ defaultTtlMs: 30_000 });
+      const l2Permanent = new MemoryAdapter();
+      const cache = new CacheManager({
+        layers: [l1Short, l2Permanent],
+        syncBackfill: true,
+      });
+
+      await l2Permanent.set("k", "v");
+      await cache.get("k");
+
+      const l1Ttl = await l1Short.getTtl("k");
+      expect(l1Ttl.kind).toBe("expiring");
+      if (l1Ttl.kind === "expiring") {
+        expect(l1Ttl.ttlMs).toBeLessThanOrEqual(30_000);
+      }
+    });
+
+    it("applies the same TTL policy to mget backfill", async () => {
+      const l1Short = new MemoryAdapter({ defaultTtlMs: 30_000 });
+      const l2Long = new MemoryAdapter({ defaultTtlMs: 300_000 });
+      const cache = new CacheManager({
+        layers: [l1Short, l2Long],
+        syncBackfill: true,
+      });
+
+      await l2Long.mset([
+        { key: "a", value: 1 },
+        { key: "b", value: 2 },
+      ]);
+      await cache.mget(["a", "b"]);
+
+      for (const key of ["a", "b"]) {
+        const ttl = await l1Short.getTtl(key);
+        expect(ttl.kind).toBe("expiring");
+        if (ttl.kind === "expiring") {
+          expect(ttl.ttlMs).toBeLessThanOrEqual(30_000);
+        }
+      }
+    });
+
+    it("gives each target layer its own backfill TTL", async () => {
+      const l1Short = new MemoryAdapter({ defaultTtlMs: 10_000 });
+      const l2Medium = new MemoryAdapter({ defaultTtlMs: 60_000 });
+      const l3Source = new MemoryAdapter({ defaultTtlMs: 600_000 });
+      const cache = new CacheManager({
+        layers: [l1Short, l2Medium, l3Source],
+        syncBackfill: true,
+      });
+
+      await l3Source.set("k", "v");
+      await cache.get("k");
+
+      const l1Ttl = await l1Short.getTtl("k");
+      const l2Ttl = await l2Medium.getTtl("k");
+      if (l1Ttl.kind === "expiring" && l2Ttl.kind === "expiring") {
+        expect(l1Ttl.ttlMs).toBeLessThanOrEqual(10_000);
+        expect(l2Ttl.ttlMs).toBeGreaterThan(10_000);
+        expect(l2Ttl.ttlMs).toBeLessThanOrEqual(60_000);
+      } else {
+        expect.unreachable("both layers should hold an expiring entry");
+      }
+    });
   });
 
   describe("namespace with multi-layer", () => {

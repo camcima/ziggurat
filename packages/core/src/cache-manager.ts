@@ -17,6 +17,7 @@ export class CacheManager {
   private readonly stampedeConfig: Required<StampedeConfig>;
   private readonly syncBackfill: boolean;
   private readonly strictWrites: boolean;
+  private readonly wrapWrites: "await" | "background";
   private readonly inFlightFetches = new Map<string, Promise<unknown>>();
   private readonly events: TypedEventEmitter<CacheEventMap>;
 
@@ -28,6 +29,7 @@ export class CacheManager {
     this.namespace = options.namespace;
     this.syncBackfill = options.syncBackfill ?? false;
     this.strictWrites = options.strictWrites ?? false;
+    this.wrapWrites = options.wrapWrites ?? "await";
     this.stampedeConfig = {
       coalesce: options.stampede?.coalesce ?? true,
     };
@@ -47,6 +49,26 @@ export class CacheManager {
 
   private namespacedKey(key: string): string {
     return this.namespace ? `${this.namespace}:${key}` : key;
+  }
+
+  /**
+   * TTL for a copy backfilled into `layer`: that layer's own defaultTtlMs
+   * when it declares one, capped by the source entry's remaining lifetime so
+   * a backfilled copy never outlives the entry it came from. A permanent
+   * source entry passes no explicit TTL, leaving the target free to apply its
+   * own policy. Layers that expose no ttlPolicy (custom adapters not built on
+   * BaseCacheAdapter) receive the remaining lifetime unchanged.
+   */
+  private backfillTtlMs(
+    layer: CacheAdapter,
+    expiresAt: number | null,
+  ): number | undefined {
+    if (expiresAt === null) return undefined;
+    const remainingMs = Math.max(0, expiresAt - Date.now());
+    const layerDefaultMs = layer.ttlPolicy?.defaultTtlMs;
+    return layerDefaultMs === undefined
+      ? remainingMs
+      : Math.min(remainingMs, layerDefaultMs);
   }
 
   async get<T>(key: string): Promise<CacheEntry<T> | null> {
@@ -88,14 +110,14 @@ export class CacheManager {
         }
         if (i > 0) {
           const backfillLayers = this.layers.slice(0, i);
-          const remainingTtlMs =
-            entry.expiresAt !== null
-              ? Math.max(0, entry.expiresAt - Date.now())
-              : undefined;
           // backfillLayers === this.layers.slice(0, i), so results[] indices align with emitWriteErrors' this.layers[] indexing
           const backfillPromise = Promise.allSettled(
             backfillLayers.map((layer) =>
-              layer.set(nsKey, entry.value, remainingTtlMs),
+              layer.set(
+                nsKey,
+                entry.value,
+                this.backfillTtlMs(layer, entry.expiresAt),
+              ),
             ),
           ).then((results) => {
             this.emitWriteErrors(results, key, "backfill");
@@ -230,7 +252,14 @@ export class CacheManager {
             factoryDurationMs,
           });
         }
-        await this.setLayers(key, value, ttlMs);
+        const writes = this.setLayers(key, value, ttlMs);
+        // setLayers() collects results with allSettled and never rejects, so
+        // the backgrounded promise cannot surface as an unhandled rejection.
+        if (this.wrapWrites === "await") {
+          await writes;
+        } else {
+          void writes;
+        }
         return value;
       } finally {
         if (this.stampedeConfig.coalesce) {
@@ -259,8 +288,11 @@ export class CacheManager {
       this.events.hasListeners("backfill");
     const start = shouldEmit ? performance.now() : 0;
 
-    const nsKeys = keys.map((k) => this.namespacedKey(k));
-    const keyMap = new Map(keys.map((k, i) => [nsKeys[i], k]));
+    // Deduplicate first: the result Map collapses repeated keys anyway, so
+    // counting them individually would inflate missCount in the mget event.
+    const uniqueKeys = [...new Set(keys)];
+    const nsKeys = uniqueKeys.map((k) => this.namespacedKey(k));
+    const keyMap = new Map(uniqueKeys.map((k, i) => [nsKeys[i], k]));
     const result = new Map<string, CacheEntry<T>>();
     const remaining = new Set(nsKeys);
 
@@ -273,7 +305,7 @@ export class CacheManager {
       } catch (error) {
         if (shouldEmit) {
           this.events.emit("error", {
-            key: keys.join(","),
+            key: uniqueKeys.join(","),
             namespace: this.namespace,
             operation: "mget",
             layerName: this.layers[i].name,
@@ -301,20 +333,20 @@ export class CacheManager {
 
       if (foundInThisLayer.length > 0) {
         const backfillLayers = this.layers.slice(0, i);
-        const backfillEntries = foundInThisLayer.map(({ nsKey, entry }) => ({
-          key: nsKey,
-          value: entry.value,
-          ttlMs:
-            entry.expiresAt !== null
-              ? Math.max(0, entry.expiresAt - Date.now())
-              : undefined,
-        }));
         const backfillKeys = foundInThisLayer
           .map(({ nsKey }) => keyMap.get(nsKey))
           .filter((k): k is string => k !== undefined);
         // backfillLayers === this.layers.slice(0, i), so results[] indices align with emitWriteErrors' this.layers[] indexing
         const backfillPromise = Promise.allSettled(
-          backfillLayers.map((layer) => layer.mset(backfillEntries)),
+          backfillLayers.map((layer) =>
+            layer.mset(
+              foundInThisLayer.map(({ nsKey, entry }) => ({
+                key: nsKey,
+                value: entry.value,
+                ttlMs: this.backfillTtlMs(layer, entry.expiresAt),
+              })),
+            ),
+          ),
         ).then((results) => {
           this.emitWriteErrors(results, backfillKeys.join(","), "backfill");
         });
@@ -340,10 +372,10 @@ export class CacheManager {
 
     if (shouldEmit && this.events.hasListeners("mget")) {
       this.events.emit("mget", {
-        keys,
+        keys: uniqueKeys,
         namespace: this.namespace,
         hitCount: result.size,
-        missCount: keys.length - result.size,
+        missCount: uniqueKeys.length - result.size,
         durationMs: performance.now() - start,
       });
     }

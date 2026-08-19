@@ -2,6 +2,15 @@ import NodeCache from "node-cache";
 import type { CacheEntry, MemoryAdapterOptions, TtlResult } from "./types.js";
 import { BaseCacheAdapter } from "./base-cache-adapter.js";
 
+/**
+ * JSON.stringify is declared as returning string, but returns undefined for
+ * undefined, functions, and symbols. Stating that honestly keeps the callers'
+ * skip-the-write checks from looking like dead code.
+ */
+function stringifyOrUndefined(value: unknown): string | undefined {
+  return JSON.stringify(value);
+}
+
 export class MemoryAdapter extends BaseCacheAdapter {
   readonly name = "memory";
   private readonly cache: NodeCache;
@@ -44,14 +53,20 @@ export class MemoryAdapter extends BaseCacheAdapter {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/require-await
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
+    // undefined is never stored — no backend can round-trip it, so every
+    // adapter treats the write as a no-op (get/has/keys all report a miss).
+    if (value === undefined) return;
     const effectiveTtl = this.resolveTtl(ttlMs);
     // ttlMs <= 0 means already expired — don't store
     if (effectiveTtl !== undefined && effectiveTtl <= 0) return;
-    const stored =
-      this.serialization === "json" ? JSON.stringify(value) : value;
-    // JSON mode cannot represent undefined — skip the write entirely so
-    // has()/keys() stay consistent with get() reporting a miss.
-    if (this.serialization === "json" && stored === undefined) return;
+    let stored: unknown = value;
+    if (this.serialization === "json") {
+      // Functions and symbols serialize to undefined — skip those writes so
+      // has()/keys() stay consistent with get() reporting a miss.
+      const serialized = stringifyOrUndefined(value);
+      if (serialized === undefined) return;
+      stored = serialized;
+    }
     // node-cache rejects ANY set at capacity, even overwrites of existing
     // keys; delete first so existing keys can always be refreshed.
     if (this.maxKeys !== undefined && this.cache.has(key)) {

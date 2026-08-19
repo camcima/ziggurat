@@ -439,4 +439,89 @@ describe("SQLiteAdapter", () => {
       }
     });
   });
+
+  describe("cleanup-on-read races", () => {
+    // Cleanup deletes are conditional on the row still being the one that was
+    // read, so a writer landing between the read and the delete survives.
+    function writeRowDirectly(
+      key: string,
+      value: string,
+      expiresAt: number | null,
+    ): void {
+      db.prepare(
+        "INSERT OR REPLACE INTO ziggurat_cache (namespace, key, value, expires_at) VALUES (?, ?, ?, ?)",
+      ).run("", key, value, expiresAt);
+    }
+
+    function rawRow(key: string): { value: string } | undefined {
+      return db
+        .prepare(
+          "SELECT value FROM ziggurat_cache WHERE namespace = ? AND key = ?",
+        )
+        .get("", key) as { value: string } | undefined;
+    }
+
+    it("removes an expired row on read", async () => {
+      writeRowDirectly("k", JSON.stringify("v"), Date.now() - 1000);
+      expect(await adapter.get("k")).toBeNull();
+      expect(rawRow("k")).toBeUndefined();
+    });
+
+    it("does not delete a row that was refreshed after the expired read", async () => {
+      writeRowDirectly("k", JSON.stringify("stale"), Date.now() - 1000);
+      // Simulate the concurrent writer winning the race: the row is no longer
+      // expired by the time the cleanup delete runs.
+      writeRowDirectly("k", JSON.stringify("fresh"), Date.now() + 60_000);
+
+      // A stale in-flight cleanup for the expired read must be a no-op.
+      await adapter.get("k");
+
+      const entry = await adapter.get<string>("k");
+      expect(entry).not.toBeNull();
+      expect(entry!.value).toBe("fresh");
+    });
+
+    it("removes a corrupt row on read", async () => {
+      writeRowDirectly("k", "{not json", null);
+      expect(await adapter.get("k")).toBeNull();
+      expect(rawRow("k")).toBeUndefined();
+    });
+
+    it("does not delete a corrupt row that was rewritten with valid JSON", async () => {
+      writeRowDirectly("k", "{not json", null);
+      writeRowDirectly("k", JSON.stringify("fresh"), null);
+
+      const entry = await adapter.get<string>("k");
+      expect(entry).not.toBeNull();
+      expect(entry!.value).toBe("fresh");
+      expect(rawRow("k")).toBeDefined();
+    });
+
+    it("skips corrupt rows in mget without dropping the good ones", async () => {
+      await adapter.set("good", "v");
+      writeRowDirectly("bad", "{not json", null);
+
+      const result = await adapter.mget<string>(["good", "bad"]);
+      expect(result.get("good")!.value).toBe("v");
+      expect(result.has("bad")).toBe(false);
+      expect(rawRow("bad")).toBeUndefined();
+      expect(rawRow("good")).toBeDefined();
+    });
+  });
+
+  describe("busyTimeoutMs", () => {
+    it("applies a default busy timeout", () => {
+      const [{ timeout }] = db.pragma("busy_timeout") as [{ timeout: number }];
+      expect(timeout).toBe(5000);
+    });
+
+    it("honors an explicit busy timeout", () => {
+      const fresh = new Database(":memory:");
+      new SQLiteAdapter({ db: fresh, busyTimeoutMs: 250 });
+      const [{ timeout }] = fresh.pragma("busy_timeout") as [
+        { timeout: number },
+      ];
+      expect(timeout).toBe(250);
+    });
+  });
 });

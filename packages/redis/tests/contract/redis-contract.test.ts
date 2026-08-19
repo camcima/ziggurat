@@ -92,7 +92,10 @@ function createInMemoryRedis(): Redis {
   } as unknown as Redis;
 }
 
+// A prefix is required for clear()/flushAll() to be scoped rather than
+// database-wide, and the contract suite clears between cases.
 runAdapterContractTests(
   "RedisAdapter",
-  () => new RedisAdapter({ client: createInMemoryRedis() }),
+  () =>
+    new RedisAdapter({ client: createInMemoryRedis(), prefix: "contract:" }),
 );

@@ -27,8 +27,18 @@ export interface AdapterTtlOptions {
   maxTtlMs?: number;
 }
 
+/**
+ * An adapter's own TTL policy, exposed so CacheManager can keep backfilled
+ * entries inside the target layer's policy instead of copying the source
+ * layer's remaining lifetime verbatim. Adapters extending BaseCacheAdapter
+ * get this for free; adapters that omit it receive the source entry's
+ * remaining TTL on backfill.
+ */
+export type AdapterTtlPolicy = Readonly<AdapterTtlOptions>;
+
 export interface CacheAdapter {
   readonly name: string;
+  readonly ttlPolicy?: AdapterTtlPolicy;
   get<T>(key: string): Promise<CacheEntry<T> | null>;
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   set<T>(key: string, value: T, ttlMs?: number): Promise<void>;
@@ -166,6 +176,21 @@ export interface CacheManagerOptions {
   stampede?: StampedeConfig;
   events?: TypedEventEmitter<CacheEventMap>;
   /**
+   * Controls whether wrap() waits for the computed value to be written to
+   * every layer before resolving.
+   *
+   * "await" (default): resolve only after all layer writes settle, so a
+   * read issued after wrap() resolves is guaranteed to see the value. A slow
+   * layer adds its full write latency to every wrap() miss — and to every
+   * caller coalesced onto it.
+   *
+   * "background": resolve as soon as the factory does and let the writes
+   * settle in the background. Lower miss latency at the cost of a brief
+   * window where the value is not yet cached. Write failures still surface
+   * via "error" events.
+   */
+  wrapWrites?: "await" | "background";
+  /**
    * When true, set/mset/delete/mdel throw an AggregateError if EVERY
    * layer fails the write. Default false (writes never throw; failures
    * are observable only via "error" events).
@@ -199,10 +224,10 @@ export interface MemoryAdapterOptions extends AdapterTtlOptions {
    * (Date, Map) survive here while JSON-based layers flatten them, so
    * multi-layer reads can return different shapes per layer.
    * "json": JSON round-trip on every set/get — consistent with the Redis,
-   * SQLite, and Memcache adapters and immune to caller mutation. Note the
-   * caveats: non-serializable values (functions, circular references) throw
-   * at `set()` time, and `undefined` values are not stored at all — reads,
-   * `has()`, and `keys()` all report a miss for them.
+   * SQLite, and Memcache adapters and immune to caller mutation. Circular
+   * references throw at `set()` time, and values JSON cannot represent at all
+   * (functions, symbols) are skipped like `undefined`: nothing is stored, and
+   * reads, `has()`, and `keys()` all report a miss.
    */
   serialization?: "reference" | "json";
 }

@@ -1,5 +1,6 @@
 import type {
   AdapterTtlOptions,
+  AdapterTtlPolicy,
   CacheAdapter,
   CacheEntry,
   CacheSetEntry,
@@ -8,8 +9,8 @@ import type {
 
 export abstract class BaseCacheAdapter implements CacheAdapter {
   abstract readonly name: string;
-  private readonly defaultTtlMs?: number;
-  private readonly maxTtlMs?: number;
+  /** This layer's own TTL policy; read by CacheManager when backfilling. */
+  readonly ttlPolicy: AdapterTtlPolicy;
 
   constructor(ttlOptions: AdapterTtlOptions = {}) {
     BaseCacheAdapter.assertValidTtlOption(
@@ -17,8 +18,10 @@ export abstract class BaseCacheAdapter implements CacheAdapter {
       ttlOptions.defaultTtlMs,
     );
     BaseCacheAdapter.assertValidTtlOption("maxTtlMs", ttlOptions.maxTtlMs);
-    this.defaultTtlMs = ttlOptions.defaultTtlMs;
-    this.maxTtlMs = ttlOptions.maxTtlMs;
+    this.ttlPolicy = Object.freeze({
+      defaultTtlMs: ttlOptions.defaultTtlMs,
+      maxTtlMs: ttlOptions.maxTtlMs,
+    });
   }
 
   private static assertValidTtlOption(
@@ -45,10 +48,11 @@ export abstract class BaseCacheAdapter implements CacheAdapter {
         `ttlMs must be a finite number of milliseconds (received ${String(ttlMs)}).`,
       );
     }
-    const requested = ttlMs ?? this.defaultTtlMs;
-    if (this.maxTtlMs === undefined) return requested;
-    if (requested === undefined) return this.maxTtlMs;
-    return Math.min(requested, this.maxTtlMs);
+    const { defaultTtlMs, maxTtlMs } = this.ttlPolicy;
+    const requested = ttlMs ?? defaultTtlMs;
+    if (maxTtlMs === undefined) return requested;
+    if (requested === undefined) return maxTtlMs;
+    return Math.min(requested, maxTtlMs);
   }
 
   abstract get<T>(key: string): Promise<CacheEntry<T> | null>;
@@ -78,9 +82,16 @@ export abstract class BaseCacheAdapter implements CacheAdapter {
     );
   }
 
+  /**
+   * Reads each key individually. Per-key failures are skipped rather than
+   * rejecting the whole batch, so callers get a partial result Map — the
+   * behavior every adapter is held to by the contract suite. Writes keep the
+   * opposite policy: a failed mset/mdel rejects so the layer is reported as
+   * having failed the write.
+   */
   async mget<T>(keys: readonly string[]): Promise<Map<string, CacheEntry<T>>> {
     const result = new Map<string, CacheEntry<T>>();
-    await Promise.all(
+    await Promise.allSettled(
       keys.map(async (key) => {
         const entry = await this.get<T>(key);
         if (entry !== null) result.set(key, entry);

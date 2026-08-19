@@ -119,20 +119,24 @@ describe("RedisAdapter", () => {
       expect(result!.expiresAt).toBe(expiresAt);
     });
 
-    it("returns null and deletes the key on corrupt JSON", async () => {
+    it("returns null on corrupt JSON without deleting the key", async () => {
       await mockRedis.set("bad", "{not json");
       const result = await adapter.get("bad");
       expect(result).toBeNull();
-      expect(mockRedis.del).toHaveBeenCalledWith("bad");
+      // Reads must not delete: it would race a concurrent writer, and with an
+      // empty prefix it would reach keys this adapter does not own.
+      expect(mockRedis.del).not.toHaveBeenCalled();
     });
 
-    it("deletes entries whose embedded expiresAt has passed and returns null", async () => {
+    it("returns null for an entry whose embedded expiresAt has passed, without deleting it", async () => {
       await mockRedis.set(
         "k",
         JSON.stringify({ value: "v", expiresAt: Date.now() - 1000 }),
       );
       expect(await adapter.get("k")).toBeNull();
-      expect(mockRedis.del).toHaveBeenCalledWith("k");
+      // The envelope check is a clock-skew backstop; Redis owns the real
+      // expiry, so a fast-clocked reader must not evict for everyone else.
+      expect(mockRedis.del).not.toHaveBeenCalled();
     });
   });
 
@@ -180,7 +184,29 @@ describe("RedisAdapter", () => {
 
   describe("clear", () => {
     it("should scan for keys matching the prefix and delete them", async () => {
-      await adapter.clear();
+      const prefixed = new RedisAdapter({ client: mockRedis, prefix: "app:" });
+      await prefixed.clear();
+      expect(mockRedis.scan).toHaveBeenCalled();
+    });
+
+    it("refuses to clear when no prefix is configured", async () => {
+      await expect(adapter.clear()).rejects.toThrow(/no prefix is configured/);
+      expect(mockRedis.scan).not.toHaveBeenCalled();
+    });
+
+    it("refuses to flushAll when no prefix is configured", async () => {
+      await expect(adapter.flushAll()).rejects.toThrow(
+        /no prefix is configured/,
+      );
+      expect(mockRedis.scan).not.toHaveBeenCalled();
+    });
+
+    it("clears an unprefixed adapter when explicitly opted in", async () => {
+      const optedIn = new RedisAdapter({
+        client: mockRedis,
+        allowUnprefixedClear: true,
+      });
+      await expect(optedIn.clear()).resolves.toBeUndefined();
       expect(mockRedis.scan).toHaveBeenCalled();
     });
   });
@@ -298,7 +324,7 @@ describe("RedisAdapter", () => {
       expect(result.has("bad")).toBe(false);
     });
 
-    it("skips and cleans up a corrupt entry in the middle of a batch", async () => {
+    it("skips a corrupt entry in the middle of a batch without deleting it", async () => {
       await adapter.set("a", "v1");
       await mockRedis.set("b", "{not json");
       await adapter.set("c", "v3");
@@ -306,7 +332,7 @@ describe("RedisAdapter", () => {
       expect(result.get("a")?.value).toBe("v1");
       expect(result.has("b")).toBe(false);
       expect(result.get("c")?.value).toBe("v3");
-      expect(mockRedis.del).toHaveBeenCalledWith("b");
+      expect(mockRedis.del).not.toHaveBeenCalled();
     });
 
     it("skips entries whose embedded expiresAt has passed", async () => {

@@ -235,7 +235,7 @@ type TtlResult =
 
 Abstract class that implements `CacheAdapter` with default implementations for all extended methods. New adapters should extend this class and only implement the 4 core methods: `get`, `set`, `delete`, `clear`.
 
-Extending it also supplies `ttlPolicy` from the TTL options you pass to `super()`, which is how `CacheManager` keeps backfilled entries inside your layer's policy. The default `mget` returns a **partial result** — a key whose `get` throws is omitted rather than rejecting the batch — while `mset`/`mdel` reject so a failed write is reported as a layer failure.
+Extending it also supplies `ttlPolicy` from the TTL options you pass to `super()`, which is how `CacheManager` keeps backfilled entries inside your layer's policy. The default `mget` returns a **partial result** — a key whose `get` throws is omitted rather than rejecting the batch — unless **every** key's `get` throws, in which case it rejects with an `AggregateError` so an outage is reported as a layer failure rather than read as a batch of misses. `mset`/`mdel` reject on any failure so a failed write is reported as a layer failure.
 
 ```ts
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
@@ -383,7 +383,7 @@ Implements the full `CacheAdapter` interface.
 - **`set`**: Serializes the value as `{ value, expiresAt }` JSON. Uses `PSETEX` for entries with TTL, `SET` for entries without. An `undefined` value is skipped.
 - **`delete`**: Deletes the prefixed key.
 - **`clear`**: Scans for all keys matching the prefix pattern and deletes them using a pipeline. Pipeline command failures throw `AggregateError`. Throws when no `prefix` is configured unless `allowUnprefixedClear` is set.
-- **`mget`**: Uses a pipeline for batch reads. Per-key read errors are skipped and the successful entries are returned — this means `mget()` may return a partial result map rather than rejecting the entire batch.
+- **`mget`**: Uses a pipeline for batch reads. Per-key read errors are skipped and the successful entries are returned — this means `mget()` may return a partial result map rather than rejecting the entire batch. If every command in the pipeline fails, `mget()` rejects with an `AggregateError`.
 - **`mset`**: Uses a pipeline for batch writes. Entries with `ttlMs <= 0` are skipped. Pipeline command failures throw `AggregateError`.
 
 See [Redis Adapter](redis-adapter.md) for detailed usage.

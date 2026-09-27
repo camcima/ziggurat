@@ -50,6 +50,26 @@ describe("MemcacheAdapter", () => {
     });
   });
 
+  describe("malformed envelopes", () => {
+    it.each([
+      ["JSON null", "null"],
+      ["an empty object", "{}"],
+      ["a missing value", '{"expiresAt":null}'],
+      ["a string expiresAt", '{"value":1,"expiresAt":"soon"}'],
+    ])("get treats %s as a miss", async (_label, raw) => {
+      await mockClient.set("k", raw, {});
+      await expect(adapter.get("k")).resolves.toBeNull();
+    });
+
+    it("mget skips a JSON null payload without losing the rest of the batch", async () => {
+      await adapter.set("good", "v1");
+      await mockClient.set("bad", "null", {});
+      const result = await adapter.mget<string>(["good", "bad"]);
+      expect(result.get("good")?.value).toBe("v1");
+      expect(result.has("bad")).toBe(false);
+    });
+  });
+
   describe("get", () => {
     it("should return null on cache miss", async () => {
       const result = await adapter.get("nonexistent");

@@ -85,18 +85,28 @@ export abstract class BaseCacheAdapter implements CacheAdapter {
   /**
    * Reads each key individually. Per-key failures are skipped rather than
    * rejecting the whole batch, so callers get a partial result Map — the
-   * behavior every adapter is held to by the contract suite. Writes keep the
-   * opposite policy: a failed mset/mdel rejects so the layer is reported as
-   * having failed the write.
+   * behavior every adapter is held to by the contract suite. If EVERY key
+   * fails, the batch rejects with an AggregateError instead: an outage must
+   * not read as a batch of misses. Writes keep the opposite policy: a failed
+   * mset/mdel rejects so the layer is reported as having failed the write.
    */
   async mget<T>(keys: readonly string[]): Promise<Map<string, CacheEntry<T>>> {
     const result = new Map<string, CacheEntry<T>>();
-    await Promise.allSettled(
+    const settled = await Promise.allSettled(
       keys.map(async (key) => {
         const entry = await this.get<T>(key);
         if (entry !== null) result.set(key, entry);
       }),
     );
+    const failures = settled.filter(
+      (s): s is PromiseRejectedResult => s.status === "rejected",
+    );
+    if (failures.length > 0 && failures.length === keys.length) {
+      throw new AggregateError(
+        failures.map((f) => f.reason as unknown),
+        `All ${String(keys.length)} key read(s) failed during mget`,
+      );
+    }
     return result;
   }
 

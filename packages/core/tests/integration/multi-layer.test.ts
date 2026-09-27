@@ -447,3 +447,25 @@ describe("Multi-Layer Cache", () => {
     });
   });
 });
+
+describe("Batch read outages", () => {
+  it("reports a layer whose every read fails and serves the batch from the next layer", async () => {
+    class DownAdapter extends MemoryAdapter {
+      override get(): Promise<never> {
+        return Promise.reject(new Error("down"));
+      }
+    }
+    const l2 = new MemoryAdapter();
+    await l2.set("a", 1);
+    const manager = new CacheManager({ layers: [new DownAdapter(), l2] });
+    const errors: Array<{ operation: string; layerIndex: number }> = [];
+    manager.on("error", (e) => errors.push(e));
+
+    const result = await manager.mget<number>(["a", "b"]);
+
+    expect(result.get("a")?.value).toBe(1);
+    expect(errors).toEqual([
+      expect.objectContaining({ operation: "mget", layerIndex: 0 }),
+    ]);
+  });
+});

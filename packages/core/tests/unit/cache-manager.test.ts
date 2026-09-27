@@ -718,6 +718,63 @@ describe("CacheManager events", () => {
       expect(wrapMisses[0].factoryDurationMs).toBeGreaterThanOrEqual(0);
     });
 
+    describe("wrap:miss timing", () => {
+      // A layer whose set() signals when it starts and settles only on release.
+      function gatedWriteLayer() {
+        let release!: () => void;
+        let markWriting!: () => void;
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const writing = new Promise<void>((resolve) => {
+          markWriting = resolve;
+        });
+        class GatedWrites extends MemoryAdapter {
+          override async set<T>(key: string, value: T, ttlMs?: number) {
+            markWriting();
+            await gate;
+            return super.set(key, value, ttlMs);
+          }
+        }
+        return { layer: new GatedWrites(), writing, release };
+      }
+
+      it("fires after the awaited writes, so durationMs covers them", async () => {
+        const { layer, writing, release } = gatedWriteLayer();
+        const manager = new CacheManager({ layers: [layer] });
+        const misses: CacheWrapMissEvent[] = [];
+        manager.on("wrap:miss", (e) => misses.push(e));
+
+        const pending = manager.wrap("key1", async () => "computed");
+        await writing;
+        expect(misses).toHaveLength(0);
+
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        release();
+        await pending;
+
+        expect(misses).toHaveLength(1);
+        expect(misses[0].durationMs).toBeGreaterThanOrEqual(15);
+        expect(misses[0].factoryDurationMs).toBeLessThan(15);
+      });
+
+      it("fires before background writes settle", async () => {
+        const { layer, writing, release } = gatedWriteLayer();
+        const manager = new CacheManager({
+          layers: [layer],
+          wrapWrites: "background",
+        });
+        const misses: CacheWrapMissEvent[] = [];
+        manager.on("wrap:miss", (e) => misses.push(e));
+
+        await manager.wrap("key1", async () => "computed");
+        await writing;
+
+        expect(misses).toHaveLength(1);
+        release();
+      });
+    });
+
     it("should emit wrap:coalesce when joining in-flight fetch", async () => {
       const adapter = new MemoryAdapter();
       const manager = new CacheManager({ layers: [adapter] });

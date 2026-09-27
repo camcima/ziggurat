@@ -134,7 +134,7 @@ const results = await Promise.all(
 );
 ```
 
-Note: Coalescing is **per-key**. Different keys run their factories independently in parallel. Only concurrent misses for the **same key** are coalesced.
+Note: Coalescing is **per-key**. Different keys run their factories independently in parallel. Only concurrent `wrap()` calls for the **same key** on the **same manager** are coalesced.
 
 ### Disabling Coalescing
 

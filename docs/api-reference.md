@@ -108,11 +108,12 @@ const user = await cache.wrap(
 
 **Behavior**:
 
-1. Check all layers sequentially (like `get`).
-2. If found, return `entry.value`.
-3. If not found and coalescing is enabled, check for an in-flight request for the same key. If one exists, attach to it.
-4. Otherwise, call the factory, store the result via `set`, and return the value.
+1. If coalescing is enabled and a `wrap()` for the same key is already in progress, attach to it (emitting `wrap:coalesce`) and return its result.
+2. Otherwise, check all layers sequentially (like `get`).
+3. If found, return `entry.value`.
+4. If not found, call the factory, store the result in every layer, and return the value.
 5. If the factory throws, the error propagates to all coalesced callers and the in-flight entry is cleaned up.
+6. If the key is `set`, `delete`d, `mset`, or `mdel`ed while steps 2–4 are in progress, the computed value is still returned but not stored, and later callers start a new operation.
 
 Step 4 waits for every layer to accept the write before resolving. Set `wrapWrites: "background"` on the manager to resolve as soon as the factory does; the writes then settle in the background and failures surface only as `"error"` events.
 

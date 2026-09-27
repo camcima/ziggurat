@@ -11,6 +11,16 @@ import type {
 } from "./types.js";
 import type { Listener } from "./event-emitter.js";
 
+/**
+ * One wrap() in progress for a key. A mutation of the key marks it
+ * invalidated: its callers still receive the computed value, but the value is
+ * not written back over the newer mutation, and later callers do not join it.
+ */
+interface WrapOperation {
+  promise: Promise<unknown>;
+  invalidated: boolean;
+}
+
 export class CacheManager {
   private readonly layers: CacheAdapter[];
   private readonly namespace?: string;
@@ -18,7 +28,10 @@ export class CacheManager {
   private readonly syncBackfill: boolean;
   private readonly strictWrites: boolean;
   private readonly wrapWrites: "await" | "background";
-  private readonly inFlightFetches = new Map<string, Promise<unknown>>();
+  // Every wrap() in progress, per key — tracked with coalescing disabled too,
+  // so mutations can fence all of them. With coalescing enabled a key has at
+  // most one live (non-invalidated) operation, the one later callers join.
+  private readonly inFlightWraps = new Map<string, Set<WrapOperation>>();
   private readonly events: TypedEventEmitter<CacheEventMap>;
 
   constructor(options: CacheManagerOptions) {
@@ -176,11 +189,13 @@ export class CacheManager {
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   async set<T>(key: string, value: T, ttlMs?: number): Promise<void> {
+    this.invalidateInFlight([key]);
     const results = await this.setLayers(key, value, ttlMs);
     this.assertWritesSucceeded(results, "set");
   }
 
   async delete(key: string): Promise<void> {
+    this.invalidateInFlight([key]);
     const nsKey = this.namespacedKey(key);
     const shouldEmit =
       this.events.hasListeners("delete") || this.events.hasListeners("error");
@@ -205,16 +220,66 @@ export class CacheManager {
    * Returns the cached value for `key`, or calls `factory` to compute it.
    * The computed value is always returned even if caching it fails — write
    * errors surface via "error" events regardless of `strictWrites`.
+   *
+   * With coalescing enabled, the whole lookup/compute/write operation is
+   * shared per key: a caller arriving while one is in progress joins it
+   * rather than starting its own lookup. A set/delete/mset/mdel of the key
+   * detaches in-progress operations, which then skip their cache write.
    */
   async wrap<T>(
     key: string,
     factory: () => Promise<T>,
     ttlMs?: number,
   ): Promise<T> {
+    const ops = this.inFlightWraps.get(key);
+    if (this.stampedeConfig.coalesce && ops !== undefined) {
+      // At most one live operation per key while coalescing; invalidated ones
+      // were removed from the map by invalidateInFlight().
+      const [joined] = ops;
+      if (this.events.hasListeners("wrap:coalesce")) {
+        this.events.emit("wrap:coalesce", {
+          key,
+          namespace: this.namespace,
+        });
+      }
+      return joined.promise as Promise<T>;
+    }
+
+    const op: WrapOperation = {
+      promise: Promise.resolve(),
+      invalidated: false,
+    };
+    const promise = this.runWrap(key, factory, ttlMs, op);
+    op.promise = promise;
+    // Registered before runWrap() resumes from its first await, so no caller
+    // can slip past, and removed only after it settles — even when the
+    // factory throws synchronously.
+    let registered = ops;
+    if (registered === undefined) {
+      registered = new Set();
+      this.inFlightWraps.set(key, registered);
+    }
+    registered.add(op);
+    const settle = (): void => {
+      const current = this.inFlightWraps.get(key);
+      if (current?.delete(op) && current.size === 0) {
+        this.inFlightWraps.delete(key);
+      }
+    };
+    // settle never throws, so the derived promise never rejects.
+    void promise.then(settle, settle);
+    return promise;
+  }
+
+  private async runWrap<T>(
+    key: string,
+    factory: () => Promise<T>,
+    ttlMs: number | undefined,
+    op: WrapOperation,
+  ): Promise<T> {
     const shouldEmit =
       this.events.hasListeners("wrap:hit") ||
-      this.events.hasListeners("wrap:miss") ||
-      this.events.hasListeners("wrap:coalesce");
+      this.events.hasListeners("wrap:miss");
     const start = shouldEmit ? performance.now() : 0;
 
     const cachedEntry = await this.get<T>(key);
@@ -229,50 +294,27 @@ export class CacheManager {
       return cachedEntry.value;
     }
 
-    if (this.stampedeConfig.coalesce && this.inFlightFetches.has(key)) {
-      if (shouldEmit) {
-        this.events.emit("wrap:coalesce", {
-          key,
-          namespace: this.namespace,
-        });
-      }
-      return this.inFlightFetches.get(key) as Promise<T>;
+    const factoryStart = shouldEmit ? performance.now() : 0;
+    const value = await factory();
+    if (shouldEmit) {
+      const factoryDurationMs = performance.now() - factoryStart;
+      this.events.emit("wrap:miss", {
+        key,
+        namespace: this.namespace,
+        durationMs: performance.now() - start,
+        factoryDurationMs,
+      });
     }
-
-    const fetchPromise = (async () => {
-      const factoryStart = shouldEmit ? performance.now() : 0;
-      try {
-        const value = await factory();
-        if (shouldEmit) {
-          const factoryDurationMs = performance.now() - factoryStart;
-          this.events.emit("wrap:miss", {
-            key,
-            namespace: this.namespace,
-            durationMs: performance.now() - start,
-            factoryDurationMs,
-          });
-        }
-        const writes = this.setLayers(key, value, ttlMs);
-        // setLayers() collects results with allSettled and never rejects, so
-        // the backgrounded promise cannot surface as an unhandled rejection.
-        if (this.wrapWrites === "await") {
-          await writes;
-        } else {
-          void writes;
-        }
-        return value;
-      } finally {
-        if (this.stampedeConfig.coalesce) {
-          this.inFlightFetches.delete(key);
-        }
-      }
-    })();
-
-    if (this.stampedeConfig.coalesce) {
-      this.inFlightFetches.set(key, fetchPromise);
+    if (op.invalidated) return value;
+    const writes = this.setLayers(key, value, ttlMs);
+    // setLayers() collects results with allSettled and never rejects, so
+    // the backgrounded promise cannot surface as an unhandled rejection.
+    if (this.wrapWrites === "await") {
+      await writes;
+    } else {
+      void writes;
     }
-
-    return fetchPromise;
+    return value;
   }
 
   async del(key: string): Promise<void> {
@@ -385,6 +427,7 @@ export class CacheManager {
 
   async mset<T>(entries: readonly CacheSetEntry<T>[]): Promise<void> {
     if (entries.length === 0) return;
+    this.invalidateInFlight(entries.map((e) => e.key));
     const shouldEmit =
       this.events.hasListeners("mset") || this.events.hasListeners("error");
     const start = shouldEmit ? performance.now() : 0;
@@ -415,6 +458,7 @@ export class CacheManager {
 
   async mdel(keys: readonly string[]): Promise<void> {
     if (keys.length === 0) return;
+    this.invalidateInFlight(keys);
     const shouldEmit =
       this.events.hasListeners("mdel") || this.events.hasListeners("error");
     const start = shouldEmit ? performance.now() : 0;
@@ -459,6 +503,20 @@ export class CacheManager {
       }
     }
     return { kind: "missing" };
+  }
+
+  /**
+   * Detach every in-flight wrap() for these keys so none of them writes a
+   * value computed before this mutation, or is joined by a later caller.
+   * Called synchronously at the start of a mutation, before any await.
+   */
+  private invalidateInFlight(keys: Iterable<string>): void {
+    for (const key of keys) {
+      const ops = this.inFlightWraps.get(key);
+      if (ops === undefined) continue;
+      for (const op of ops) op.invalidated = true;
+      this.inFlightWraps.delete(key);
+    }
   }
 
   private emitWriteErrors(

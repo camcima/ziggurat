@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/camcima/ziggurat/compare/v0.3.0...v0.4.0) (2026-09-27)
+
+### Bug Fixes
+
+* **core:** make wrap() a per-key operation fenced by mutations ([#74](https://github.com/camcima/ziggurat/issues/74)) ([02d4a81](https://github.com/camcima/ziggurat/commit/02d4a817ab07e71b8c9a992cd13ce08f4d5db7ec))
+* **core:** time wrap:miss to completion and qualify consistency guarantees ([#78](https://github.com/camcima/ziggurat/issues/78)) ([46322a6](https://github.com/camcima/ziggurat/commit/46322a6e07f33f99b682d25742c9b1d834266963)), references [79-#81](https://github.com/79-/issues/81)
+* validate cache envelopes, surface total batch read failures, apply a zero SQLite busy timeout ([#77](https://github.com/camcima/ziggurat/issues/77)) ([80dec8f](https://github.com/camcima/ziggurat/commit/80dec8f502078f025352ccd21cebc731e7849af6))
+
 ## [0.3.0](https://github.com/camcima/ziggurat/compare/v0.2.0...v0.3.0) (2026-08-19)
 
 ### ⚠ BREAKING CHANGES

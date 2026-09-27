@@ -29,14 +29,14 @@ const cache = new CacheManager({
 
 ## Configuration
 
-| Property        | Type                | Default            | Description                                                                                                                                    |
-| --------------- | ------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db`            | `Database.Database` | _(required)_       | A better-sqlite3 database instance.                                                                                                            |
-| `tableName`     | `string`            | `"ziggurat_cache"` | Name of the cache table.                                                                                                                       |
-| `namespace`     | `string`            | `""`               | Namespace for key isolation within the same table.                                                                                             |
-| `defaultTtlMs`  | `number`            | _none_             | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer. |
-| `maxTtlMs`      | `number`            | _none_             | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.              |
-| `busyTimeoutMs` | `number`            | `5000`             | How long a blocked write waits for a competing writer before failing with `SQLITE_BUSY`. Set `0` to keep SQLite's no-wait default.             |
+| Property        | Type                | Default            | Description                                                                                                                                                         |
+| --------------- | ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db`            | `Database.Database` | _(required)_       | A better-sqlite3 database instance.                                                                                                                                 |
+| `tableName`     | `string`            | `"ziggurat_cache"` | Name of the cache table.                                                                                                                                            |
+| `namespace`     | `string`            | `""`               | Namespace for key isolation within the same table.                                                                                                                  |
+| `defaultTtlMs`  | `number`            | _none_             | Fallback TTL applied when no `ttlMs` is passed to `set`/`wrap`. An explicit `ttlMs` always wins. Use `maxTtlMs` to cap all TTLs for the layer.                      |
+| `maxTtlMs`      | `number`            | _none_             | Upper bound applied to every entry's TTL — explicit TTLs, `defaultTtlMs`, and otherwise-permanent entries are all capped to this.                                   |
+| `busyTimeoutMs` | `number`            | `5000`             | How long a blocked write waits for a competing writer before failing with `SQLITE_BUSY`. Always applied, replacing the connection's own timeout; `0` means no wait. |
 
 ## Schema
 

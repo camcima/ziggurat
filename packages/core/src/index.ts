@@ -24,5 +24,6 @@ export type {
 export { CacheManager } from "./cache-manager.js";
 export { MemoryAdapter } from "./memory-adapter.js";
 export { BaseCacheAdapter } from "./base-cache-adapter.js";
+export { decodeCacheEntry } from "./decode-cache-entry.js";
 export { TypedEventEmitter } from "./event-emitter.js";
 export type { Listener } from "./event-emitter.js";

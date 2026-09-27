@@ -26,9 +26,10 @@ export interface SQLiteAdapterOptions extends AdapterTtlOptions {
   namespace?: string;
   /**
    * Milliseconds a blocked write waits for a competing writer before failing
-   * with SQLITE_BUSY. Defaults to 5000; set 0 to leave SQLite's default (no
-   * wait — a concurrent writer fails immediately). Only relevant when several
-   * connections or processes share the database file.
+   * with SQLITE_BUSY. Defaults to 5000; 0 means no wait — a concurrent writer
+   * fails immediately. Always applied to the connection, replacing any
+   * timeout it was opened with. Only relevant when several connections or
+   * processes share the database file.
    */
   busyTimeoutMs?: number;
 }
@@ -72,9 +73,12 @@ export class SQLiteAdapter extends BaseCacheAdapter {
     // Without this a write that collides with another connection's write
     // throws SQLITE_BUSY immediately instead of waiting its turn.
     const busyTimeoutMs = options.busyTimeoutMs ?? 5000;
-    if (busyTimeoutMs > 0) {
-      this.db.pragma(`busy_timeout = ${String(Math.ceil(busyTimeoutMs))}`);
+    if (!Number.isFinite(busyTimeoutMs) || busyTimeoutMs < 0) {
+      throw new Error(
+        `busyTimeoutMs must be a finite number >= 0, got ${String(busyTimeoutMs)}`,
+      );
     }
+    this.db.pragma(`busy_timeout = ${String(Math.ceil(busyTimeoutMs))}`);
 
     // Create table and index if not exists
     this.db.exec(`

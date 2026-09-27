@@ -117,6 +117,52 @@ describe("Stampede Protection (Request Coalescing)", () => {
     });
   });
 
+  describe("per-key operation lifecycle", () => {
+    it("recovers after a factory that throws synchronously", async () => {
+      const manager = new CacheManager({ layers: [new MemoryAdapter()] });
+
+      await expect(
+        manager.wrap("key1", () => {
+          throw new Error("sync failure");
+        }),
+      ).rejects.toThrow("sync failure");
+
+      const succeedingFactory = vi.fn(async () => "recovered");
+      await expect(manager.wrap("key1", succeedingFactory)).resolves.toBe(
+        "recovered",
+      );
+      expect(succeedingFactory).toHaveBeenCalledOnce();
+    });
+
+    it("coalesces a caller whose cache lookup outlasts another caller's whole miss", async () => {
+      // The second lookup captures a miss, then stalls until the first
+      // caller has computed, cached, and finished. Coalescing must already
+      // cover the lookup, or that stale miss starts a second factory.
+      let releaseSecondRead!: () => void;
+      const secondReadGate = new Promise<void>((resolve) => {
+        releaseSecondRead = resolve;
+      });
+      let reads = 0;
+      class StallingSecondRead extends MemoryAdapter {
+        override async get<T>(key: string) {
+          const entry = await super.get<T>(key);
+          if (++reads === 2) await secondReadGate;
+          return entry;
+        }
+      }
+      const manager = new CacheManager({ layers: [new StallingSecondRead()] });
+      const factory = vi.fn(async () => "value");
+
+      const first = manager.wrap("key1", factory);
+      const second = manager.wrap("key1", factory);
+      await expect(first).resolves.toBe("value");
+      releaseSecondRead();
+
+      await expect(second).resolves.toBe("value");
+      expect(factory).toHaveBeenCalledOnce();
+    });
+  });
+
   describe("with coalescing disabled", () => {
     it("should call factory for each concurrent wrap call", async () => {
       const adapter = new MemoryAdapter();

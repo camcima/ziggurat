@@ -523,5 +523,24 @@ describe("SQLiteAdapter", () => {
       ];
       expect(timeout).toBe(250);
     });
+
+    it("applies zero as no wait, overriding the connection's own timeout", () => {
+      const fresh = new Database(":memory:", { timeout: 1234 });
+      new SQLiteAdapter({ db: fresh, busyTimeoutMs: 0 });
+      const [{ timeout }] = fresh.pragma("busy_timeout") as [
+        { timeout: number },
+      ];
+      expect(timeout).toBe(0);
+    });
+
+    it.each([-1, NaN, Infinity])(
+      "rejects busyTimeoutMs %s",
+      (busyTimeoutMs) => {
+        expect(
+          () =>
+            new SQLiteAdapter({ db: new Database(":memory:"), busyTimeoutMs }),
+        ).toThrow(/busyTimeoutMs must be a finite number >= 0/);
+      },
+    );
   });
 });

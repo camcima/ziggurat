@@ -108,11 +108,12 @@ const user = await cache.wrap(
 
 **Behavior**:
 
-1. Check all layers sequentially (like `get`).
-2. If found, return `entry.value`.
-3. If not found and coalescing is enabled, check for an in-flight request for the same key. If one exists, attach to it.
-4. Otherwise, call the factory, store the result via `set`, and return the value.
+1. If coalescing is enabled and a `wrap()` for the same key is already in progress, attach to it (emitting `wrap:coalesce`) and return its result.
+2. Otherwise, check all layers sequentially (like `get`).
+3. If found, return `entry.value`.
+4. If not found, call the factory, store the result in every layer, and return the value.
 5. If the factory throws, the error propagates to all coalesced callers and the in-flight entry is cleaned up.
+6. If the key is `set`, `delete`d, `mset`, or `mdel`ed while steps 2–4 are in progress, the computed value is still returned but not stored, and later callers start a new operation.
 
 Step 4 waits for every layer to accept the write before resolving. Set `wrapWrites: "background"` on the manager to resolve as soon as the factory does; the writes then settle in the background and failures surface only as `"error"` events.
 
@@ -195,7 +196,7 @@ unsub();
 | `error`         | `key`, `operation`, `layerName`, `layerIndex`, `error`           | Any layer throws during an operation                                                                                                                             |
 | `backfill`      | `key`, `sourceLayerName`, `sourceLayerIndex`, `targetLayerNames` | A backfill is **scheduled** after a lower-layer hit. Emitted before the writes settle; failures arrive separately as `error` events with `operation: "backfill"` |
 | `wrap:hit`      | `key`, `durationMs`                                              | `wrap()` finds a cached value                                                                                                                                    |
-| `wrap:miss`     | `key`, `durationMs`, `factoryDurationMs`                         | `wrap()` calls the factory                                                                                                                                       |
+| `wrap:miss`     | `key`, `durationMs`, `factoryDurationMs`                         | `wrap()` called the factory. Emitted when the call completes: `durationMs` covers lookup, factory, and awaited writes; `factoryDurationMs` the factory alone.    |
 | `wrap:coalesce` | `key`                                                            | `wrap()` joins an in-flight request                                                                                                                              |
 | `mget`          | `keys`, `hitCount`, `missCount`, `durationMs`                    | `mget()` completes                                                                                                                                               |
 | `mset`          | `keyCount`, `durationMs`                                         | `mset()` completes                                                                                                                                               |
@@ -234,7 +235,7 @@ type TtlResult =
 
 Abstract class that implements `CacheAdapter` with default implementations for all extended methods. New adapters should extend this class and only implement the 4 core methods: `get`, `set`, `delete`, `clear`.
 
-Extending it also supplies `ttlPolicy` from the TTL options you pass to `super()`, which is how `CacheManager` keeps backfilled entries inside your layer's policy. The default `mget` returns a **partial result** — a key whose `get` throws is omitted rather than rejecting the batch — while `mset`/`mdel` reject so a failed write is reported as a layer failure.
+Extending it also supplies `ttlPolicy` from the TTL options you pass to `super()`, which is how `CacheManager` keeps backfilled entries inside your layer's policy. The default `mget` returns a **partial result** — a key whose `get` throws is omitted rather than rejecting the batch — unless **every** key's `get` throws, in which case it rejects with an `AggregateError` so an outage is reported as a layer failure rather than read as a batch of misses. `mset`/`mdel` reject on any failure so a failed write is reported as a layer failure.
 
 ```ts
 import { BaseCacheAdapter } from "@ziggurat-cache/core";
@@ -382,7 +383,7 @@ Implements the full `CacheAdapter` interface.
 - **`set`**: Serializes the value as `{ value, expiresAt }` JSON. Uses `PSETEX` for entries with TTL, `SET` for entries without. An `undefined` value is skipped.
 - **`delete`**: Deletes the prefixed key.
 - **`clear`**: Scans for all keys matching the prefix pattern and deletes them using a pipeline. Pipeline command failures throw `AggregateError`. Throws when no `prefix` is configured unless `allowUnprefixedClear` is set.
-- **`mget`**: Uses a pipeline for batch reads. Per-key read errors are skipped and the successful entries are returned — this means `mget()` may return a partial result map rather than rejecting the entire batch.
+- **`mget`**: Uses a pipeline for batch reads. Per-key read errors are skipped and the successful entries are returned — this means `mget()` may return a partial result map rather than rejecting the entire batch. If every command in the pipeline fails, `mget()` rejects with an `AggregateError`.
 - **`mset`**: Uses a pipeline for batch writes. Entries with `ttlMs <= 0` are skipped. Pipeline command failures throw `AggregateError`.
 
 See [Redis Adapter](redis-adapter.md) for detailed usage.

@@ -3,7 +3,7 @@ import type {
   CacheEntry,
   CacheSetEntry,
 } from "@ziggurat-cache/core";
-import { BaseCacheAdapter } from "@ziggurat-cache/core";
+import { BaseCacheAdapter, decodeCacheEntry } from "@ziggurat-cache/core";
 import type { Redis } from "ioredis";
 
 export interface RedisAdapterOptions extends AdapterTtlOptions {
@@ -39,16 +39,12 @@ export class RedisAdapter extends BaseCacheAdapter {
     const raw = await this.client.get(this.prefixedKey(key));
     if (raw === null) return null;
 
-    let entry: CacheEntry<T>;
-    try {
-      entry = JSON.parse(raw) as CacheEntry<T>;
-    } catch {
-      // Corrupt/legacy payload — treat as a miss. Reads never delete: a
-      // read-then-delete would race a concurrent writer refreshing the key,
-      // and with an empty prefix it would reach keys this adapter does not
-      // own. The next set() overwrites the bad payload anyway.
-      return null;
-    }
+    // Corrupt, malformed, or legacy payload — treat as a miss. Reads never
+    // delete: a read-then-delete would race a concurrent writer refreshing
+    // the key, and with an empty prefix it would reach keys this adapter does
+    // not own. The next set() overwrites the bad payload anyway.
+    const entry = decodeCacheEntry<T>(raw);
+    if (entry === null) return null;
 
     // Redis enforces the real expiry via PSETEX; this envelope check is a
     // clock-skew backstop only, so it reports a miss without deleting — a
@@ -168,17 +164,20 @@ export class RedisAdapter extends BaseCacheAdapter {
 
     if (!results) return map;
 
+    // Per-key errors are skipped for a partial result, but if every read
+    // failed the outage must surface rather than read as a batch of misses.
+    if (results.every(([err]) => err !== null)) {
+      this.checkPipelineErrors(results);
+    }
+
     for (let i = 0; i < keys.length; i++) {
       const [err, raw] = results[i] as [Error | null, string | null];
       if (err || raw === null) continue;
 
-      let entry: CacheEntry<T>;
-      try {
-        entry = JSON.parse(raw) as CacheEntry<T>;
-      } catch {
-        // Corrupt/legacy payload — a miss, deleted by nobody. See get().
-        continue;
-      }
+      // Corrupt, malformed, or legacy payload — a miss, deleted by nobody.
+      // See get().
+      const entry = decodeCacheEntry<T>(raw);
+      if (entry === null) continue;
       if (entry.expiresAt !== null && Date.now() >= entry.expiresAt) {
         continue;
       }

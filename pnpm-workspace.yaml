@@ -4,7 +4,7 @@ packages:
 # Moved here from package.json's "pnpm.overrides": pnpm 11 no longer reads the
 # package.json "pnpm" field, so overrides must live in pnpm-workspace.yaml.
 overrides:
-  "js-yaml@4": "^4.2.0"
+  "js-yaml@4": "^4.3.2"
 
 # Supply-chain hardening (requires pnpm >= 10.26; see pnpm.io/settings).
 # Wait 7 days (10080 minutes) before installing newly published versions,

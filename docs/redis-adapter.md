@@ -192,6 +192,19 @@ Always set a `prefix` in production. This prevents key collisions with other app
 
 Ziggurat's CacheManager automatically skips failing layers. If Redis is down, your memory layer (L1) still serves requests. When Redis comes back, new misses naturally repopulate it.
 
+### Set a Command Timeout
+
+`CacheManager` skips a layer whose operation **fails**, but it waits on one that **hangs** — it has no deadline of its own. ioredis applies no per-command timeout by default, so a stalled Redis can hold every read that falls through to it and every `wrap()` that awaits its write. Set `commandTimeout` so a stall becomes an error the manager can skip:
+
+```ts
+const client = new Redis({
+  host: "localhost",
+  commandTimeout: 250, // ms; a command with no reply by then rejects
+});
+```
+
+While the client is disconnected, ioredis also queues commands until it reconnects, bounded by `maxRetriesPerRequest` (default 20 reconnection attempts). Set `enableOfflineQueue: false` if you would rather have commands fail immediately while Redis is unreachable.
+
 ### Monitor Key Count
 
 The `clear()` method walks the keyspace with incremental `SCAN`, which does not block the server but does cost a full pass. On instances with millions of keys, prefer TTL-based expiration over calling `clear()`.

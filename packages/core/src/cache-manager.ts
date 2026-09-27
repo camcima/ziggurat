@@ -296,23 +296,26 @@ export class CacheManager {
 
     const factoryStart = shouldEmit ? performance.now() : 0;
     const value = await factory();
+    const factoryDurationMs = shouldEmit ? performance.now() - factoryStart : 0;
+    if (!op.invalidated) {
+      const writes = this.setLayers(key, value, ttlMs);
+      // setLayers() collects results with allSettled and never rejects, so
+      // the backgrounded promise cannot surface as an unhandled rejection.
+      if (this.wrapWrites === "await") {
+        await writes;
+      } else {
+        void writes;
+      }
+    }
+    // Emitted once the caller's wait is over, so durationMs is the latency
+    // the caller saw — including awaited writes, excluding background ones.
     if (shouldEmit) {
-      const factoryDurationMs = performance.now() - factoryStart;
       this.events.emit("wrap:miss", {
         key,
         namespace: this.namespace,
         durationMs: performance.now() - start,
         factoryDurationMs,
       });
-    }
-    if (op.invalidated) return value;
-    const writes = this.setLayers(key, value, ttlMs);
-    // setLayers() collects results with allSettled and never rejects, so
-    // the backgrounded promise cannot surface as an unhandled rejection.
-    if (this.wrapWrites === "await") {
-      await writes;
-    } else {
-      void writes;
     }
     return value;
   }

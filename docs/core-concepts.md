@@ -175,6 +175,15 @@ This ordering is local to one manager and covers only factory results. It does n
 
 Use finite TTLs (`maxTtlMs`) to bound how long such a stale value can survive.
 
+## Freshness Across Processes
+
+Each process has its own `MemoryAdapter`, and nothing tells it when another process changes the shared layers. When process A calls `set` or `delete`, it updates the shared L2 and its own L1 — but process B's L1 keeps serving the old value until that entry expires.
+
+- **Give the memory layer a finite TTL.** Its `defaultTtlMs`/`maxTtlMs` is the upper bound on how stale another process's change can look. An L1 entry with no TTL never refreshes on its own.
+- **Need changes visible sooner?** Ziggurat does not broadcast invalidations. Use versioned keys (see [Advanced Usage](advanced-usage.md#versioned-keys)), or publish change events from your application and have every instance call `delete` on the affected keys.
+
+Stampede protection is scoped the same way: each manager coalesces its own callers, so N processes can run the same factory up to N times.
+
 ## TTL (Time to Live)
 
 TTL is specified in **milliseconds**. There are two ways to configure it:

@@ -307,6 +307,8 @@ Redis down: get(L1) → miss → get(L2) → ERROR → skip → factory → set(
 
 When Redis recovers, new factory results are written to both layers again. There's no manual intervention needed.
 
+This covers layers that **fail**. A layer that **hangs** is different: Ziggurat has no per-operation deadline of its own, so a read that never settles blocks the fall-through to the next layer, and a write that never settles holds `wrap()` (with the default `wrapWrites: "await"`) and every caller coalesced onto it. Give every backend client a timeout so a stall becomes a failure — see the [Redis](redis-adapter.md#set-a-command-timeout) and [Memcache](memcache-adapter.md#client-timeouts) adapter guides.
+
 ### Graceful Degradation Pattern
 
 For critical paths, you can wrap the entire cache call in a try-catch and fall back to a direct fetch:
@@ -334,9 +336,11 @@ const cache = new CacheManager({ layers, strictWrites: true });
 
 `strictWrites` applies to direct `set`/`mset`/`delete`/`mdel` calls. `wrap()` is unaffected: it always returns the value your factory computed, even if caching that value fails — the write error still surfaces via `"error"` events. In a single-layer setup, any write failure means "every layer failed", so it throws.
 
+A write that succeeds on at least one layer does not throw — and does not guarantee the next read returns the new value. Reads go to layers in order, so if L1 failed the write while L2 accepted it, L1's older entry keeps answering until it expires or is overwritten. Watch `"error"` events for partial write failures.
+
 ## Miss latency and `wrapWrites`
 
-By default `wrap()` resolves only after the computed value has been written to every layer, so a read issued right after it is guaranteed to see the value. The cost is that a slow layer adds its full write latency to every miss — and to every caller coalesced onto that miss. A Redis instance that is degraded rather than down is the case that hurts: it accepts writes, slowly, and each `wrap()` miss waits for them.
+By default `wrap()` resolves only after the computed value has been written to every layer, so a read issued right after it sees the value — as long as those writes succeeded, the entry has not expired, and no concurrent `set`/`delete` replaced it. The cost is that a slow layer adds its full write latency to every miss — and to every caller coalesced onto that miss. A Redis instance that is degraded rather than down is the case that hurts: it accepts writes, slowly, and each `wrap()` miss waits for them.
 
 Set `wrapWrites: "background"` to resolve as soon as the factory does and let the layer writes settle afterwards:
 

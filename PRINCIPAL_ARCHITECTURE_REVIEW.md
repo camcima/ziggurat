@@ -5,6 +5,8 @@
 **Reviewed commit:** `38bfb0d4fcd4e7d47306a03d985faa53fc66c61a`  
 **Scope:** All six packages, adapter contracts, tests, public documentation, package configuration, and CI.
 
+> **Resolution status:** R1, R3, and the in-process part of R2 are fixed in [#74](https://github.com/camcima/ziggurat/pull/74). R2's remaining cases (writes already sent to a layer, backfills, cross-process ordering) are documented as out of scope in `docs/core-concepts.md`. R4–R8 are still open. The findings below are preserved as written at review time.
+
 ## Assessment
 
 The package boundaries are sensible, the implementation is small enough to audit, and the shared adapter tests provide a useful foundation. The main remaining risks concern concurrency and failure semantics. Two confirmed defects deserve priority: a synchronous factory exception can permanently prevent retries for a key, and work started before a mutation can later restore stale data.

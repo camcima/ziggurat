@@ -1,6 +1,6 @@
 {
   "name": "@ziggurat-cache/sqlite",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "SQLite adapter for @ziggurat-cache/core multi-layer cache",
   "license": "MIT",
   "repository": {
@@ -61,6 +61,6 @@
     "better-sqlite3": "^13.0.2",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }

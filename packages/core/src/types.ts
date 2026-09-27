@@ -121,7 +121,12 @@ export interface CacheWrapHitEvent {
 export interface CacheWrapMissEvent {
   key: string;
   namespace?: string;
+  /**
+   * The whole wrap() as its caller saw it: lookup, factory, and — with
+   * wrapWrites "await" — the cache writes. Background writes are excluded.
+   */
   durationMs: number;
+  /** The factory call alone. */
   factoryDurationMs: number;
 }
 
@@ -180,9 +185,10 @@ export interface CacheManagerOptions {
    * every layer before resolving.
    *
    * "await" (default): resolve only after all layer writes settle, so a
-   * read issued after wrap() resolves is guaranteed to see the value. A slow
-   * layer adds its full write latency to every wrap() miss — and to every
-   * caller coalesced onto it.
+   * read issued after wrap() resolves sees the value — provided the writes
+   * succeeded, the entry has not expired, and no concurrent set/delete has
+   * replaced it. A slow layer adds its full write latency to every wrap()
+   * miss — and to every caller coalesced onto it.
    *
    * "background": resolve as soon as the factory does and let the writes
    * settle in the background. Lower miss latency at the cost of a brief
@@ -197,6 +203,11 @@ export interface CacheManagerOptions {
    *
    * In a single-layer configuration, any write failure will throw because
    * "every layer" is the one layer.
+   *
+   * A write that succeeds on some layers does not throw, and does not make
+   * the next read return the new value: if an earlier layer failed the
+   * write, its older entry still answers reads until it expires or is
+   * overwritten.
    *
    * `wrap()` is unaffected by this option — it always returns the computed
    * factory value and surfaces cache-write failures only via "error" events.

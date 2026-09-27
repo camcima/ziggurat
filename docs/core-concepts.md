@@ -136,17 +136,17 @@ Request N → cache miss → DB query ─┘
 
 ### The Solution: Request Coalescing
 
-Ziggurat uses **request coalescing** (in-flight deduplication). When the first request triggers a cache miss and calls the factory function, all subsequent requests for the **same key** attach to the existing in-flight Promise instead of creating new ones.
+Ziggurat uses **request coalescing** (in-flight deduplication). The first `wrap()` call for a key starts one operation — cache lookup, factory on a miss, cache write — and every later call for the **same key** attaches to that operation until it settles, instead of starting its own lookup.
 
 ```
-Request 1 → cache miss → factory() ──→ result ──→ cache + return
-Request 2 → cache miss → [coalesced] ─────────→ same result
-Request 3 → cache miss → [coalesced] ─────────→ same result
+Request 1 → lookup → cache miss → factory() ──→ result ──→ cache + return
+Request 2 → [coalesced] ─────────────────────────────→ same result
+Request 3 → [coalesced] ─────────────────────────────→ same result
 ...
-Request N → cache miss → [coalesced] ─────────→ same result
+Request N → [coalesced] ─────────────────────────────→ same result
 ```
 
-The factory executes **exactly once**. All N callers get the same value.
+The factory executes **once per manager instance**. All N callers get the same value. Separate `CacheManager` instances — and separate processes — keep separate in-flight maps, so each can run the factory once.
 
 ### Configuration
 
@@ -161,7 +161,28 @@ const cache = new CacheManager({
 
 ### Error Propagation
 
-If the factory function throws an error during coalescing, the error propagates to **all** coalesced callers. The in-flight entry is cleaned up so subsequent calls trigger a fresh factory invocation.
+If the factory function throws an error during coalescing — synchronously or by rejecting — the error propagates to **all** coalesced callers. The in-flight entry is cleaned up so subsequent calls trigger a fresh factory invocation.
+
+### Mutations During a `wrap()`
+
+A `set`, `delete`, `mset`, or `mdel` of a key detaches any `wrap()` still in progress for it, whether or not coalescing is enabled. The detached callers still receive the value their factory computed, but that value is **not** written to the cache — it would overwrite the newer mutation — and later callers start a fresh operation instead of joining it.
+
+This ordering is local to one manager and covers only factory results. It does not cover:
+
+- a `wrap()` write that had already been sent to a layer when the mutation started;
+- a backfill from a lower layer whose read began before the mutation;
+- mutations made by another manager or process sharing the same backend.
+
+Use finite TTLs (`maxTtlMs`) to bound how long such a stale value can survive.
+
+## Freshness Across Processes
+
+Each process has its own `MemoryAdapter`, and nothing tells it when another process changes the shared layers. When process A calls `set` or `delete`, it updates the shared L2 and its own L1 — but process B's L1 keeps serving the old value until that entry expires.
+
+- **Give the memory layer a finite TTL.** Its `defaultTtlMs`/`maxTtlMs` is the upper bound on how stale another process's change can look. An L1 entry with no TTL never refreshes on its own.
+- **Need changes visible sooner?** Ziggurat does not broadcast invalidations. Use versioned keys (see [Advanced Usage](advanced-usage.md#versioned-keys)), or publish change events from your application and have every instance call `delete` on the affected keys.
+
+Stampede protection is scoped the same way: each manager coalesces its own callers, so N processes can run the same factory up to N times.
 
 ## TTL (Time to Live)
 

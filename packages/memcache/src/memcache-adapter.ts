@@ -1,5 +1,5 @@
 import type { AdapterTtlOptions, CacheEntry } from "@ziggurat-cache/core";
-import { BaseCacheAdapter } from "@ziggurat-cache/core";
+import { BaseCacheAdapter, decodeCacheEntry } from "@ziggurat-cache/core";
 import type { Client } from "memjs";
 
 export interface MemcacheAdapterOptions extends AdapterTtlOptions {
@@ -30,16 +30,12 @@ export class MemcacheAdapter extends BaseCacheAdapter {
     const result = await this.client.get(this.prefixedKey(key));
     if (result.value === null) return null;
 
-    let entry: CacheEntry<T>;
-    try {
-      entry = JSON.parse(result.value.toString()) as CacheEntry<T>;
-    } catch {
-      // Corrupt/legacy payload — treat as a miss. Reads never delete: a
-      // read-then-delete would race a concurrent writer refreshing the key,
-      // and with an empty prefix it would reach keys this adapter does not
-      // own. The next set() overwrites the bad payload anyway.
-      return null;
-    }
+    // Corrupt, malformed, or legacy payload — treat as a miss. Reads never
+    // delete: a read-then-delete would race a concurrent writer refreshing
+    // the key, and with an empty prefix it would reach keys this adapter does
+    // not own. The next set() overwrites the bad payload anyway.
+    const entry = decodeCacheEntry<T>(result.value.toString());
+    if (entry === null) return null;
 
     // Memcached enforces the real expiry itself; this envelope check is a
     // clock-skew backstop only, so it reports a miss without deleting — a

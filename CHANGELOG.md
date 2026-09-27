@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.4.0](https://github.com/camcima/ziggurat/compare/v0.3.0...v0.4.0) (2026-09-27)
+
+### Behavior changes
+
+These fixes change what callers and custom adapters can observe:
+
+* **Coalescing covers the cache lookup.** With `stampede.coalesce` enabled, a `wrap()` for a key that already has one in progress joins it before doing its own lookup. Coalesced callers no longer read the cache themselves, so per-layer `hit`/`miss` events drop to one per shared operation, and `wrap:coalesce` can fire when the shared lookup turns out to be a hit.
+* **Mutations fence in-flight `wrap()` calls.** A `set`, `delete`, `mset`, or `mdel` of a key stops any `wrap()` still in progress for it from writing its value to the cache. Its callers still receive the value, and later callers start a fresh operation. See "Mutations During a `wrap()`" in `docs/core-concepts.md` for what this does not cover.
+* **`mget` rejects when every key fails.** `BaseCacheAdapter.mget` (used by the Memcache adapter and custom adapters) and `RedisAdapter.mget` now reject with an `AggregateError` instead of returning an empty map, so `CacheManager` reports the layer error and falls through. Partial failures still return partial results.
+* **Malformed Redis/Memcache entries are misses.** A payload that is not a `{ value, expiresAt }` object reads as a miss for that key, instead of a hit carrying `undefined` or an exception that fails the batch. Values that serialize to nothing (functions, objects whose `toJSON()` returns `undefined`) now read back as misses.
+* **SQLite `busyTimeoutMs`.** `0` now means no wait, replacing the connection's own timeout (better-sqlite3 defaults to 5000 ms). Negative, `NaN`, and infinite values throw.
+* **`wrap:miss` timing.** The event fires when `wrap()` completes, so `durationMs` (and the OTel `ziggurat.cache.duration` histogram for `wrap`) includes writes awaited under `wrapWrites: "await"`. `factoryDurationMs` still covers the factory alone.
+
+### Features
+
+* **core:** export `decodeCacheEntry(raw)`, which parses and validates a JSON cache envelope for custom adapters.
+
+### Bug Fixes
+
+* **core:** make wrap() a per-key operation fenced by mutations ([#74](https://github.com/camcima/ziggurat/issues/74)) ([02d4a81](https://github.com/camcima/ziggurat/commit/02d4a817ab07e71b8c9a992cd13ce08f4d5db7ec))
+* **core:** time wrap:miss to completion and qualify consistency guarantees ([#78](https://github.com/camcima/ziggurat/issues/78)) ([46322a6](https://github.com/camcima/ziggurat/commit/46322a6e07f33f99b682d25742c9b1d834266963))
+* validate cache envelopes, surface total batch read failures, apply a zero SQLite busy timeout ([#77](https://github.com/camcima/ziggurat/issues/77)) ([80dec8f](https://github.com/camcima/ziggurat/commit/80dec8f502078f025352ccd21cebc731e7849af6))
+
 ## [0.3.0](https://github.com/camcima/ziggurat/compare/v0.2.0...v0.3.0) (2026-08-19)
 
 ### ⚠ BREAKING CHANGES

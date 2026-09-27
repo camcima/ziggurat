@@ -140,6 +140,31 @@ describe("RedisAdapter", () => {
     });
   });
 
+  describe("malformed envelopes", () => {
+    it.each([
+      ["JSON null", "null"],
+      ["an empty object", "{}"],
+      ["a missing value", '{"expiresAt":null}'],
+      ["a string expiresAt", '{"value":1,"expiresAt":"soon"}'],
+    ])("get treats %s as a miss", async (_label, raw) => {
+      await mockRedis.set("k", raw);
+      await expect(adapter.get("k")).resolves.toBeNull();
+    });
+
+    it("mget skips a JSON null payload without losing the rest of the batch", async () => {
+      await adapter.set("good", "v1");
+      await mockRedis.set("bad", "null");
+      const result = await adapter.mget<string>(["good", "bad"]);
+      expect(result.get("good")?.value).toBe("v1");
+      expect(result.has("bad")).toBe(false);
+    });
+
+    it("reads a value that serializes to nothing as a miss, not an undefined hit", async () => {
+      await adapter.set("k", { toJSON: () => undefined });
+      await expect(adapter.get("k")).resolves.toBeNull();
+    });
+  });
+
   describe("set", () => {
     it("should store JSON-serialized CacheEntry without TTL", async () => {
       await adapter.set("key1", "value1");
@@ -362,6 +387,22 @@ describe("RedisAdapter", () => {
       // "a" errored, "b" succeeded — partial result returned
       expect(result.has("a")).toBe(false);
       expect(result.get("b")!.value).toBe("ok");
+    });
+
+    it("should reject when every pipeline slot errored", async () => {
+      const failingRedis = createMockRedis();
+      const failingAdapter = new RedisAdapter({ client: failingRedis });
+      const origPipeline = failingRedis.pipeline as ReturnType<typeof vi.fn>;
+      origPipeline.mockReturnValueOnce({
+        get: vi.fn().mockReturnThis(),
+        exec: vi.fn().mockResolvedValue([
+          [new Error("redis read failed"), null],
+          [new Error("redis read failed"), null],
+        ]),
+      });
+      await expect(failingAdapter.mget(["a", "b"])).rejects.toThrow(
+        "2 Redis pipeline command(s) failed",
+      );
     });
   });
 

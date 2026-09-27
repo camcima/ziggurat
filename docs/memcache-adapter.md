@@ -38,6 +38,18 @@ const cache = new CacheManager({
 
 > **Warning:** memcached has no way to enumerate or delete keys by prefix, so `clear()` and `flushAll()` both call `flush` — wiping **the entire memcached server**, including keys written by other applications and other `MemcacheAdapter` prefixes. Avoid calling them in shared environments.
 
+### Client Timeouts
+
+`CacheManager` skips a layer whose operation fails but waits on one that hangs, so the client's own timeouts are what bound a stalled memcached. memjs sets them by default — `timeout` of 0.5 s per operation, `conntimeout` of twice that, and 2 `retries` — and you can tune them (in **seconds**) when creating the client:
+
+```ts
+const client = memjs.Client.create("localhost:11211", {
+  timeout: 0.25,
+  conntimeout: 0.5,
+  retries: 1,
+});
+```
+
 ## TTL Handling
 
 Memcached uses TTLs in **seconds**. The adapter automatically converts from milliseconds, rounding up with `Math.ceil`. A TTL of 0 (or omitted) means no expiration until evicted by memory pressure.

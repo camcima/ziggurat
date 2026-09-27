@@ -234,10 +234,33 @@ describe("TTL resolution (defaultTtlMs / maxTtlMs)", () => {
 describe("BaseCacheAdapter batch error propagation", () => {
   const adapter = new FailingAdapter();
 
-  it("mget should return a partial result rather than rejecting when gets fail", async () => {
+  it("mget should reject when every get fails", async () => {
+    // A total read failure must not look like a batch of misses: rejecting
+    // lets CacheManager report the layer error and fall through.
+    const rejection = adapter.mget(["a", "b"]);
+    await expect(rejection).rejects.toBeInstanceOf(AggregateError);
+    await expect(rejection).rejects.toThrow(/2 key read\(s\) failed/);
+  });
+
+  it("mget should return a partial result when only some gets fail", async () => {
     // Reads degrade to partial results so one bad key cannot cost the caller
     // the whole batch — and, through CacheManager, the whole layer.
-    await expect(adapter.mget(["a", "b"])).resolves.toEqual(new Map());
+    class PartlyFailingAdapter extends FailingAdapter {
+      override async get<T>(key: string): Promise<CacheEntry<T> | null> {
+        if (key === "bad") throw new Error("get failed");
+        return { value: key as T, expiresAt: null };
+      }
+    }
+    const result = await new PartlyFailingAdapter().mget<string>([
+      "good",
+      "bad",
+    ]);
+    expect(result.get("good")?.value).toBe("good");
+    expect(result.has("bad")).toBe(false);
+  });
+
+  it("mget of no keys should resolve empty", async () => {
+    await expect(adapter.mget([])).resolves.toEqual(new Map());
   });
 
   it("mset should reject when underlying set calls fail", async () => {

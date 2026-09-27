@@ -138,6 +138,19 @@ All methods return `Promise`. Even if your implementation is synchronous (like t
 
 Cleaning up expired or corrupt entries on read is fine when the rows are unambiguously yours (the SQLite adapter does it, guarded so a concurrent writer is never clobbered). When the backend is shared and scoped only by a key prefix — Redis, Memcached — the built-in adapters report a miss and leave the key alone. The next `set()` replaces it.
 
+### 8. Validate What You Read Back
+
+A backend that stores the `{ value, expiresAt }` envelope as JSON can hand back anything: a legacy format, another writer's data, a payload truncated by a bug. `decodeCacheEntry(raw)` from `@ziggurat-cache/core` — what the Redis and Memcache adapters use — parses a payload and returns `null` unless it is a well-formed envelope, so a bad entry reads as a miss for that key instead of a hit carrying garbage or an exception that fails the whole batch.
+
+```ts
+import { decodeCacheEntry } from "@ziggurat-cache/core";
+
+async get<T>(key: string): Promise<CacheEntry<T> | null> {
+  const raw = await this.client.get(key);
+  return raw === null ? null : decodeCacheEntry<T>(raw);
+}
+```
+
 ## Using Your Adapter
 
 Once implemented, use it like any built-in adapter:

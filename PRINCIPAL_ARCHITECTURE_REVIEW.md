@@ -5,7 +5,7 @@
 **Reviewed commit:** `38bfb0d4fcd4e7d47306a03d985faa53fc66c61a`  
 **Scope:** All six packages, adapter contracts, tests, public documentation, package configuration, and CI.
 
-> **Resolution status:** R1, R3, and the in-process part of R2 are fixed in [#74](https://github.com/camcima/ziggurat/pull/74). R2's remaining cases (writes already sent to a layer, backfills, cross-process ordering) are documented as out of scope in `docs/core-concepts.md`. R4–R8 are still open. The findings below are preserved as written at review time.
+> **Resolution status:** R1, R3, and the in-process part of R2 are fixed in [#74](https://github.com/camcima/ziggurat/pull/74). R2's remaining cases (writes already sent to a layer, backfills, cross-process ordering) are documented as out of scope in `docs/core-concepts.md`. R4, R8, and the minimal version of R5 (a batch read that fails for every key now rejects) are fixed in [#77](https://github.com/camcima/ziggurat/pull/77); R5's per-key partial-failure telemetry, R6, and R7 are still open. The findings below are preserved as written at review time.
 
 ## Assessment
 

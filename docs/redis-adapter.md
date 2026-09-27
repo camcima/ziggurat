@@ -180,7 +180,7 @@ await cache.set("dates", {
 });
 ```
 
-`get()` and `mget()` treat an unparseable (corrupt or legacy) cached payload as a miss, so a single bad entry can't fail a read or a whole batch. Reads never delete: a read-then-delete would race a concurrent writer refreshing the key, and with an empty `prefix` it could reach keys the adapter does not own. The bad payload is replaced by the next `set()` for that key — which `wrap()` does automatically on the miss it just reported.
+`get()` and `mget()` treat an unparseable or malformed (corrupt or legacy) cached payload as a miss, so a single bad entry can't fail a read or a whole batch. A payload counts as malformed unless it is a JSON object with a `value` property and an `expiresAt` that is `null` or a finite number — so a value that serializes to nothing, such as a function or an object whose `toJSON()` returns `undefined`, reads back as a miss rather than a hit carrying `undefined`. Reads never delete: a read-then-delete would race a concurrent writer refreshing the key, and with an empty `prefix` it could reach keys the adapter does not own. The bad payload is replaced by the next `set()` for that key — which `wrap()` does automatically on the miss it just reported.
 
 ## Production Tips
 

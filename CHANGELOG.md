@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0](https://github.com/camcima/ziggurat/compare/v0.4.0...v0.5.0) (2026-09-27)
+
+### Features
+
+* **nestjs:** declare NestJS 12 peer support ([#83](https://github.com/camcima/ziggurat/issues/83)) ([a00526a](https://github.com/camcima/ziggurat/commit/a00526a874ed7cd51ccff032e831f62c0bbd808e)), references [#76](https://github.com/camcima/ziggurat/issues/76)
+
 ## [0.4.0](https://github.com/camcima/ziggurat/compare/v0.3.0...v0.4.0) (2026-09-27)
 
 ### Behavior changes

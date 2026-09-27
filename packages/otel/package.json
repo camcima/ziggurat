@@ -1,6 +1,6 @@
 {
   "name": "@ziggurat-cache/otel",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "OpenTelemetry instrumentation for @ziggurat-cache/core multi-layer cache",
   "license": "MIT",
   "repository": {

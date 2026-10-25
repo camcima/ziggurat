@@ -10,6 +10,11 @@ overrides:
 # Wait 7 days (10080 minutes) before installing newly published versions,
 # so a compromised release has time to be caught and yanked.
 minimumReleaseAge: 10080
+# Temporary exception: security fix for GHSA-333x-w4r6-6crp, GHSA-w74x-v6f9-j3xg,
+# GHSA-wjr9-j795-jxcr and GHSA-xhq7-xmqj-769h (fast-uri, dev-only via commitlint > ajv).
+# 3.1.9 was published 2026-10-19; safe to remove after 2026-10-27.
+minimumReleaseAgeExclude:
+  - fast-uri@3.1.9
 # Refuse transitive dependencies resolved from non-registry (git/http/tarball) sources.
 blockExoticSubdeps: true
 # Prevent a malicious update from downgrading these security settings.

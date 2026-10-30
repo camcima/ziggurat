@@ -19,9 +19,9 @@ Two different floors apply, and they are not the same number:
 | Where                             | Node    | Why                                                                        |
 | --------------------------------- | ------- | -------------------------------------------------------------------------- |
 | **Developing this repo**          | ≥ 22.13 | pnpm 11 loads the `node:sqlite` builtin, which does not exist before 22.13 |
-| **Consuming a published package** | ≥ 20    | What the shipped bundles actually require at runtime                       |
+| **Consuming a published package** | ≥ 22    | The oldest supported Node.js line; Node 20 is end-of-life                  |
 
-The root `package.json` is `private: true`, so its `engines.node` (`>=22.13`) constrains contributors only. The six published packages declare `>=20` because that is what their built output needs — `scripts/smoke-test.mjs` loads every bundle and exercises the core API on Node 20 in CI, so the claim stays honest.
+The root `package.json` is `private: true`, so its `engines.node` (`>=22.13`) constrains contributors only. The six published packages declare `>=22` — `scripts/smoke-test.mjs` loads every bundle and exercises the core API on Node 22 and 24 in CI, so the claim stays honest.
 
 Don't "fix" the mismatch by raising the packages to match the root. They describe different audiences.
 

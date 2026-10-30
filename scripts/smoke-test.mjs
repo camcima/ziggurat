@@ -2,10 +2,10 @@
  * Consumer-perspective smoke test for the built bundles.
  *
  * The repo's own toolchain needs Node >= 22.13 (pnpm 11 refuses to install on
- * anything older), so `pnpm test` cannot run on the Node 20 floor the packages
- * advertise in `engines`. This script loads the built output the way a
- * consumer does — no pnpm, no vitest, just `node` — which is what lets CI
- * verify that floor on the runtime itself.
+ * anything older), while the packages advertise `>=22` in `engines`. This
+ * script loads the built output the way a consumer does — no pnpm, no vitest,
+ * just `node` — which is what lets CI verify that floor (and the newest
+ * supported runtime) on the runtime itself.
  *
  * Run after `pnpm build`:  node scripts/smoke-test.mjs
  */

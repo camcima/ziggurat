@@ -11,7 +11,7 @@
 [![npm version](https://img.shields.io/npm/v/@ziggurat-cache/core)](https://www.npmjs.com/package/@ziggurat-cache/core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5%2B-blue.svg)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-green.svg)](https://nodejs.org/)
 
 </div>
 
@@ -150,7 +150,7 @@ See the [docs](docs/) directory for detailed guides:
 
 ## Requirements
 
-- Node.js >= 20 — verified in CI by loading the built bundles on Node 20 and 24
+- Node.js >= 22 — verified in CI by loading the built bundles on Node 22 and 24
 - TypeScript >= 5.x (recommended)
 
 Contributing to this repository needs Node.js >= 22.13, since pnpm 11 does not run below that. See [CONTRIBUTING.md](CONTRIBUTING.md#node-versions).

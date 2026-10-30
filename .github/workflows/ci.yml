@@ -58,18 +58,17 @@ jobs:
           flags: unit
           fail_ci_if_error: true
 
-  # Guards the `engines: >=20` floor the published packages advertise. The
-  # required `test` job pins Node 22, and the repo's own toolchain cannot run
-  # any lower (pnpm 11 requires >= 22.13), so this builds on 22 and then loads
-  # the built output under the oldest and newest supported runtimes the way a
-  # consumer would — plain `node`, no pnpm. Kept as its own job so the
-  # required check names stay stable.
+  # Guards the `engines: >=22` floor the published packages advertise. The
+  # `test` job runs on Node 22 through pnpm and vitest; this builds on 22 and
+  # then loads the built output under the oldest and newest supported runtimes
+  # the way a consumer would — plain `node`, no pnpm. Kept as its own job so
+  # the required check names stay stable.
   compat:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["20", "24"]
+        node-version: ["22", "24"]
     name: compat (node ${{ matrix.node-version }})
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

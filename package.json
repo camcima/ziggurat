@@ -22,8 +22,8 @@
     "security": "pnpm security:audit && pnpm security:secrets"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@eslint/js": "^10.0.1",
     "@release-it/conventional-changelog": "^12.0.2",
     "@typescript-eslint/eslint-plugin": "^8.71.1",
@@ -35,7 +35,7 @@
     "prettier": "^3.9.10",
     "release-it": "^21.1.1",
     "release-it-pnpm": "^4.6.6",
-    "tsup": "^8.5.1",
+    "tsup": "^9.0.0",
     "turbo": "^2.11.7",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.1",
